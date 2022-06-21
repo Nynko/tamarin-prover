@@ -188,6 +188,7 @@ closeTheoryWithMaude sig thy0 autoSources =
        TextItem
        PredicateItem
        TranslationItem
+       VersionItem
 
     unfoldClosedRules :: [TheoryItem [ClosedProtoRule] IncrementalProof s] -> [TheoryItem ClosedProtoRule IncrementalProof s]
     unfoldClosedRules        (RuleItem r:is) = map RuleItem r ++ unfoldClosedRules is
@@ -196,6 +197,7 @@ closeTheoryWithMaude sig thy0 autoSources =
     unfoldClosedRules        (TextItem i:is) = TextItem i:unfoldClosedRules is
     unfoldClosedRules   (PredicateItem i:is) = PredicateItem i:unfoldClosedRules is
     unfoldClosedRules       (TranslationItem i:is) = TranslationItem i:unfoldClosedRules is
+    unfoldClosedRules       (VersionItem i:is) = VersionItem i:unfoldClosedRules is
     unfoldClosedRules                     [] = []
 
     -- Name of the auto-generated lemma

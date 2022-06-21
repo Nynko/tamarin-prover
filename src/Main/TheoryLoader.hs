@@ -70,6 +70,7 @@ import           Control.Category
 import           System.Console.CmdArgs.Explicit
 
 import           Theory
+import           TheoryObject                        (addVersion)
 import           Theory.Text.Parser                  (parseIntruderRules, parseOpenTheory, parseOpenTheoryString, parseOpenDiffTheory, parseOpenDiffTheoryString)
 import           Theory.Tools.AbstractInterpretation (EvaluationStyle(..))
 import           Theory.Tools.IntruderRules          (specialIntruderRules, subtermIntruderRules
@@ -265,8 +266,8 @@ loadClosedThyWf as inFile = do
     return (closedTheory, report)
 
 -- | Load a closed theory and report on well-formedness errors.
-loadClosedThyWfReport :: Arguments -> FilePath -> IO ClosedTheory
-loadClosedThyWfReport as inFile = do
+loadClosedThyWfReport :: Arguments -> String -> FilePath -> IO ClosedTheory
+loadClosedThyWfReport as version inFile = do
     (openThy, transThy0) <- loadOpenAndTranslatedThy as inFile
     transThy <- addMessageDeductionRuleVariants transThy0
     transSig <- toSignatureWithMaude (maudePath as) $ get thySignature transThy
@@ -275,7 +276,7 @@ loadClosedThyWfReport as inFile = do
     let errors = checkWellformedness transThy transSig ++ Sapic.checkWellformednessSapic openThy
     reportWellformedness prefix (hasQuitOnWarning as) errors
     -- return closed theory
-    closeThyWithMaude transSig as openThy transThy
+    closeThyWithMaude transSig as openThy $ addVersion version transThy
 
 -- | Load a closed diff theory and report on well-formedness errors.
 loadClosedDiffThyWfReport :: Arguments -> FilePath -> IO ClosedDiffTheory

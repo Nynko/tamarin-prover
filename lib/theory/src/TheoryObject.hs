@@ -110,7 +110,7 @@ module TheoryObject (
   , addCaseTest
   , lookupAccLemma
   , lookupCaseTest
-  ) where
+  , addVersion) where
 
 import Theory.Constraint.Solver.Heuristics
 import Data.Label as L
@@ -197,14 +197,15 @@ filterSide s l = case l of
 -- | Fold a theory item.
 foldTheoryItem
     :: (r -> a) -> (Restriction -> a) -> (Lemma p -> a) -> (FormalComment -> a) -> (Predicate -> a) -> (s -> a)
-    -> TheoryItem r p s -> a
-foldTheoryItem fRule fRestriction fLemma fText fPredicate fTranslationItem i = case i of
+    -> (String->a) -> TheoryItem r p s -> a
+foldTheoryItem fRule fRestriction fLemma fText fPredicate fTranslationItem versionItem i = case i of
     RuleItem ru   -> fRule ru
     LemmaItem lem -> fLemma lem
     TextItem txt  -> fText txt
     RestrictionItem rstr  -> fRestriction rstr
     PredicateItem     p  -> fPredicate p
     TranslationItem s -> fTranslationItem s
+    VersionItem version -> versionItem version
 
 -- | Fold a theory item.
 foldDiffTheoryItem
@@ -221,7 +222,7 @@ foldDiffTheoryItem fDiffRule fEitherRule fDiffLemma fEitherLemma fRestriction fT
 -- | Map a theory item.
 mapTheoryItem :: (r -> r') -> (p -> p') -> TheoryItem r p s -> TheoryItem r' p' s
 mapTheoryItem f g =
-    foldTheoryItem (RuleItem . f) RestrictionItem (LemmaItem . fmap g) TextItem PredicateItem TranslationItem
+    foldTheoryItem (RuleItem . f) RestrictionItem (LemmaItem . fmap g) TextItem PredicateItem TranslationItem VersionItem
 
 -- | Map a diff theory item.
 mapDiffTheoryItem :: (r -> r') -> ((Side, r2) -> (Side, r2')) -> (DiffLemma p -> DiffLemma p') -> ((Side, Lemma p2) -> (Side, Lemma p2')) -> DiffTheoryItem r r2 p p2 -> DiffTheoryItem r' r2' p' p2'
@@ -257,7 +258,7 @@ mapMProcessesDef f thy = do
 -- | All rules of a theory.
 theoryRules :: Theory sig c r p s -> [r]
 theoryRules =
-    foldTheoryItem return (const []) (const []) (const []) (const []) (const []) <=< L.get thyItems
+    foldTheoryItem return (const []) (const []) (const []) (const []) (const []) (const []) <=< L.get thyItems
 
 -- | All diff rules of a theory.
 diffTheoryDiffRules :: DiffTheory sig c r r2 p p2 -> [r]
@@ -283,15 +284,15 @@ rightTheoryRules =
 -- | All restrictions of a theory.
 theoryRestrictions :: Theory sig c r p s -> [Restriction]
 theoryRestrictions =
-    foldTheoryItem (const []) return (const []) (const []) (const []) (const []) <=< L.get thyItems
+    foldTheoryItem (const []) return (const []) (const []) (const []) (const []) (const []) <=< L.get thyItems
 
 -- | All lemmas of a theory.
 theoryLemmas :: Theory sig c r p s -> [Lemma p]
 theoryLemmas =
-    foldTheoryItem (const []) (const []) return (const []) (const []) (const []) <=< L.get thyItems
+    foldTheoryItem (const []) (const []) return (const []) (const []) (const []) (const []) <=< L.get thyItems
 
 translationElements :: Theory sig c1 b p c2 -> [c2]
-translationElements = foldTheoryItem (const []) (const []) (const []) (const []) (const []) return <=< L.get thyItems
+translationElements = foldTheoryItem (const []) (const []) (const []) (const []) (const []) return (const []) <=< L.get thyItems
 
 -- | All CaseTest definitions of a theory.
 theoryCaseTests :: Theory sig c r p TranslationElement -> [CaseTest]
@@ -315,7 +316,7 @@ theoryFunctionTypingInfos t = [ i | FunctionTypingInfo i <- translationElements 
 
 -- | All process definitions of a theory.
 theoryPredicates :: Theory sig c r p s -> [Predicate]
-theoryPredicates =  foldTheoryItem (const []) (const []) (const []) (const []) return (const []) <=< L.get thyItems
+theoryPredicates =  foldTheoryItem (const []) (const []) (const []) (const []) return (const []) (const []) <=< L.get thyItems
 
 -- | All export info definitions of a theory.
 theoryExportInfos :: Theory sig c b p TranslationElement -> [ExportInfo]
@@ -381,6 +382,10 @@ addLemma :: Lemma p -> Theory sig c r p s -> Maybe (Theory sig c r p s)
 addLemma l thy = do
     guard (isNothing $ lookupLemma (L.get lName l) thy)
     return $ modify thyItems (++ [LemmaItem l]) thy
+
+-- | Add the version string for tamarin, maude, commit...
+addVersion :: String -> Theory sig c r p s -> Theory sig c r p s
+addVersion version = modify thyItems (++ [VersionItem version])
 
 addProcess :: PlainProcess -> Theory sig c r p TranslationElement -> Theory sig c r p TranslationElement
 addProcess l = modify thyItems (++ [TranslationItem (ProcessItem l)])
@@ -458,6 +463,7 @@ filterLemma lemmaSelector = modify thyItems (concatMap fItem)
                              (return . TextItem)
                              (return . PredicateItem)
                              (return . TranslationItem)
+                             (return . VersionItem)
     check l = do guard (lemmaSelector l); return (LemmaItem l)
 
 -- | Add a new lemma. Fails, if a lemma with the same name exists.
@@ -493,6 +499,7 @@ removeLemma lemmaName thy = do
                              (return . TextItem)
                              (return . PredicateItem)
                              (return . TranslationItem)
+                             (return . VersionItem)
     check l = do guard (L.get lName l /= lemmaName); return (LemmaItem l)
 
 -- | Remove a lemma by name. Fails, if the lemma does not exist.
@@ -594,7 +601,8 @@ prettyTheory :: HighlightDocument d
              => (sig -> d) -> (c -> d) -> (r -> d) -> (p -> d) -> (s -> d)
              -> Theory sig c r p s -> d
 prettyTheory ppSig ppCache ppRule ppPrf ppSap thy = vsep $
-    [ kwTheoryHeader $ text $ L.get thyName thy
+    [ version (_thyItems thy)
+    , kwTheoryHeader $ text $ L.get thyName thy
     , lineComment_ "Function signature and definition of the equational theory E"
     , ppSig $ L.get thySignature thy
     , if null thyH then text "" else text "heuristic: " <> text (prettyGoalRankings thyH)
@@ -604,8 +612,13 @@ prettyTheory ppSig ppCache ppRule ppPrf ppSap thy = vsep $
     [ kwEnd ]
   where
     ppItem = foldTheoryItem
-        ppRule prettyRestriction (prettyLemma ppPrf) (uncurry prettyFormalComment) prettyPredicate ppSap
+        ppRule prettyRestriction (prettyLemma ppPrf) (uncurry prettyFormalComment) prettyPredicate ppSap (const emptyDoc)
     thyH = L.get thyHeuristic thy
+
+    version :: HighlightDocument d => [TheoryItem r p s] -> d
+    version [] = lineComment_ "No version data - Should not happen"
+    version (VersionItem x:_)= multiComment_  [x]
+    version (_:xs) = version xs
 
 
 prettyTranslationElement :: HighlightDocument d => TranslationElement -> d

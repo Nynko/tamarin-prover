@@ -55,6 +55,7 @@ data TheoryItem r p s =
      | TextItem FormalComment
      | PredicateItem Predicate
      | TranslationItem s
+     | VersionItem String 
      deriving( Show, Eq, Ord, Functor, Generic, NFData, Binary )
 
 -- | A diff theory item built over the given rule type.

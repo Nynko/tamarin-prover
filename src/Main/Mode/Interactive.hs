@@ -95,7 +95,6 @@ run thisMode as = case findArg "workDir" as of
 
           -- Get String for version
           versionExport <- getVersionIO maudeVersion 
-          _ <- putStrLn versionExport
 
           port <- readPort
           let webUrl = serverUrl port
@@ -121,7 +120,7 @@ run thisMode as = case findArg "workDir" as of
                 ("Finished loading theories ... server ready at \n\n    " ++ webUrl ++ "\n")
                 cacheDir
                 workDir (argExists "loadstate" as) (argExists "autosave" as)
-                (loadClosedThyWfReport as) (loadClosedThyString as)
+                (loadClosedThyWfReport as versionExport) (loadClosedThyString as)
                 (reportOnClosedThyStringWellformedness as)
                 (argExists "debug" as) (graphPath as) readImageFormat
                 (constructAutoProver as)
