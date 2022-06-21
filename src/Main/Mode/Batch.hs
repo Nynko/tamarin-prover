@@ -34,6 +34,7 @@ import           Main.TheoryLoader
 import           Main.Utils
 
 import           Theory.Module
+import TheoryObject (addVersion)
 -- import           Debug.Trace
 
 -- | Batch processing mode.
@@ -80,12 +81,19 @@ run :: TamarinMode -> Arguments -> IO ()
 run thisMode as
   | null inFiles = helpAndExit thisMode (Just "no input files given")
   | argExists "parseOnly" as || argExists "outModule" as = do
-      mapM_ processThy inFiles
+      versionExport <- getVersionIO " -- Unknown, remove parseOnly or outModule to get it \n"   -- Get String for version
+      mapM_ (processThy versionExport) inFiles
       putStrLn ""
   | otherwise  = do
-      _ <- ensureMaude as
+      -- Ensure Maude version and get Maude version 
+      maybeMaudeVersion <- ensureMaude as
+      let maudeVersion = fromMaybe "Nothing" maybeMaudeVersion
+
+      -- Get String for version
+      versionExport <- getVersionIO maudeVersion 
+
       putStrLn ""
-      summaries <- mapM processThy inFiles
+      summaries <- mapM (processThy versionExport) inFiles 
       putStrLn ""
       putStrLn $ replicate 78 '='
       putStrLn "summary of summaries:"
@@ -123,17 +131,18 @@ run thisMode as
     -- theory processing functions
     ------------------------------
 
-    processThy :: FilePath -> IO Pretty.Doc
-    processThy inFile
+    processThy :: String -> FilePath -> IO Pretty.Doc
+    processThy version inFile 
       | argExists "parseOnly" as && argExists "diff" as =
           out (const Pretty.emptyDoc) (return . prettyOpenDiffTheory) (loadOpenDiffThy   as inFile)
-      | argExists "parseOnly" as || argExists "outModule" as =
-          out (const Pretty.emptyDoc) choosePretty (loadOpenThy as inFile)
+      | argExists "parseOnly" as || argExists "outModule" as = do
+          openThy <- loadOpenThy as inFile
+          out (const Pretty.emptyDoc) choosePretty (return $ addVersion version openThy)
       | argExists "diff" as =
           out ppWfAndSummaryDiff      (return . prettyClosedDiffTheory) (loadClosedDiffThy as inFile)
       | otherwise        = do
           (thy,report) <- loadClosedThyWf as inFile
-          out (ppWfAndSummary report) (return . prettyClosedTheory) (return thy)
+          out (ppWfAndSummary report) (return . prettyClosedTheory) (return $ addVersion version thy )
       where
         ppAnalyzed = Pretty.text $ "analyzed: " ++ inFile
         ppWfAndSummary report thy = do
