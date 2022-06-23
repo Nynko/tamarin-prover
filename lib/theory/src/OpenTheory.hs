@@ -30,6 +30,7 @@ import Prelude hiding (id, (.))
 import Pretty
 import Theory.Text.Pretty
 import Control.Parallel.Strategies
+import qualified Data.Map as Map
 
 
 -- remove Sapic items and convert other items to identical item but with unit type for sapic elements
@@ -390,11 +391,11 @@ defaultOption = Option False False False False False False False S.empty
 
 -- | Default theory
 defaultOpenTheory :: Bool -> OpenTheory
-defaultOpenTheory flag = Theory "default" [] (emptySignaturePure flag) [] [] defaultOption []
+defaultOpenTheory flag = Theory "default" [] (emptySignaturePure flag) [] [] defaultOption Map.empty
 
 -- | Default diff theory
 defaultOpenDiffTheory :: Bool -> OpenDiffTheory
-defaultOpenDiffTheory flag = DiffTheory "default" [] (emptySignaturePure flag) [] [] [] [] []
+defaultOpenDiffTheory flag = DiffTheory "default" [] (emptySignaturePure flag) [] [] [] [] [] Map.empty
 
 -- Add the default Diff lemma to an Open Diff Theory
 addDefaultDiffLemma:: OpenDiffTheory -> OpenDiffTheory

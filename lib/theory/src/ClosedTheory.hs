@@ -399,7 +399,8 @@ prettyClosedDiffTheory thy = if containsManualRuleVariantsDiff mergedRules
             ,_diffThyCacheRight=(L.get diffThyCacheRight thy)
             ,_diffThyDiffCacheLeft=(L.get diffThyDiffCacheLeft thy)
             ,_diffThyDiffCacheRight=(L.get diffThyDiffCacheRight thy)
-            ,_diffThyItems = mergedRules}
+            ,_diffThyItems = mergedRules
+            ,_diffThyParams = (L.get diffThyParams thy)}
     ppInjectiveFactInsts crc =
         case S.toList $ L.get crcInjectiveFactInsts crc of
             []   -> emptyDoc

@@ -28,6 +28,7 @@ module TheoryObject (
   , diffThyCacheRight
   , diffThyDiffCacheLeft
   , diffThyDiffCacheRight
+  , diffThyParams
   , thyHeuristic
   , diffThyHeuristic
   , DiffLemma(..)
@@ -112,6 +113,7 @@ module TheoryObject (
   , lookupAccLemma
   , lookupCaseTest
   , addParamsToThy
+  , addParamsToDiffThy
   ) where
 
 import Theory.Constraint.Solver.Heuristics
@@ -129,6 +131,7 @@ import Items.AccLemmaItem
 import Lemma
 import qualified Data.Label.Poly
 import qualified Data.Label.Total as Data.Label.Point
+import qualified Data.Map as Map
 
 
 
@@ -167,7 +170,7 @@ data Theory sig c r p s = Theory {
        , _thyCache     :: c
        , _thyItems     :: [TheoryItem r p s]
        , _thyOptions   :: Option
-       , _thyParams    :: [(String,String)]  -- (Key,Value)
+       , _thyParams    :: Map.Map String [String]  -- (Key,Value)
        }
        deriving( Eq, Ord, Show, Generic, NFData, Binary )
 
@@ -184,6 +187,7 @@ data DiffTheory sig c r r2 p p2 = DiffTheory {
        , _diffThyDiffCacheLeft  :: c
        , _diffThyDiffCacheRight :: c
        , _diffThyItems          :: [DiffTheoryItem r r2 p p2]
+       , _diffThyParams         :: Map.Map String [String]  -- (Key,Value)
        }
        deriving( Eq, Ord, Show, Generic, NFData, Binary )
 $(mkLabels [''DiffTheory])
@@ -481,7 +485,7 @@ addHeuristic h (Theory n [] sig c i o params) = Just (Theory n h sig c i o param
 addHeuristic _ _ = Nothing
 
 addDiffHeuristic :: [GoalRanking] -> DiffTheory sig c r r2 p p2 -> Maybe (DiffTheory sig c r r2 p p2)
-addDiffHeuristic h (DiffTheory n [] sig cl cr dcl dcr i) = Just (DiffTheory n h sig cl cr dcl dcr i)
+addDiffHeuristic h (DiffTheory n [] sig cl cr dcl dcr i params) = Just (DiffTheory n h sig cl cr dcl dcr i params)
 addDiffHeuristic _ _ = Nothing
 
 -- | Remove a lemma by name. Fails, if the lemma does not exist.
@@ -592,8 +596,11 @@ itemToRule :: TheoryItem r p s -> Maybe r
 itemToRule (RuleItem r) = Just r
 itemToRule _            = Nothing
 
-addParamsToThy :: [(String,String)] -> Theory sig c r p s -> Theory sig c r p s
-addParamsToThy params = modify thyParams (++ params)
+addParamsToThy :: String -> [String] -> Theory sig c r p s -> Theory sig c r p s
+addParamsToThy name params = modify thyParams (Map.insertWith (++) name params)
+
+addParamsToDiffThy :: String -> [String] -> DiffTheory sig c r r2 p p2 -> DiffTheory sig c r r2 p p2
+addParamsToDiffThy name params = modify diffThyParams (Map.insertWith (++) name params)
 
 --Pretty print a theory
 prettyTheory :: HighlightDocument d
