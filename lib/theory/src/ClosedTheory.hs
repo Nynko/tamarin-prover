@@ -359,7 +359,8 @@ prettyClosedTheory thy = if containsManualRuleVariants mergedRules
             ,_thySignature=(L.get thySignature thy)
             ,_thyCache=(L.get thyCache thy)
             ,_thyItems = mergedRules
-            ,_thyOptions =(L.get thyOptions thy)}
+            ,_thyOptions =(L.get thyOptions thy)
+            ,_thyParams = (L.get thyParams thy)}
     ppInjectiveFactInsts crc =
         case S.toList $ L.get crcInjectiveFactInsts crc of
             []   -> emptyDoc

@@ -162,10 +162,10 @@ closeTheoryWithMaude sig thy0 autoSources =
   if autoSources && containsPartialDeconstructions (cache items)
     then
         proveTheory (const True) checkProof
-      $ Theory (L.get thyName thy0) h sig (cache items') items' (L.get thyOptions thy0)
+      $ Theory (L.get thyName thy0) h sig (cache items') items' (L.get thyOptions thy0) (L.get thyParams thy0)
     else
         proveTheory (const True) checkProof
-      $ Theory (L.get thyName thy0) h sig (cache items) items (L.get thyOptions thy0)
+      $ Theory (L.get thyName thy0) h sig (cache items) items (L.get thyOptions thy0) (L.get thyParams thy0)
   where
     h          = L.get thyHeuristic thy0
     forcedInjFacts = L.get forcedInjectiveFacts $ L.get thyOptions thy0
@@ -218,7 +218,7 @@ closeTheoryWithMaude sig thy0 autoSources =
 
     -- extract protocol rules
     rules :: [TheoryItem ClosedProtoRule IncrementalProof s] -> [ClosedProtoRule]
-    rules its = theoryRules (Theory errClose errClose errClose errClose its errClose)
+    rules its = theoryRules (Theory errClose errClose errClose errClose its errClose errClose)
     errClose = error "closeTheory"
 
     addSolvingLoopBreakers = useAutoLoopBreakersAC
@@ -427,11 +427,11 @@ applyPartialEvaluationDiff evalStyle autoSources thy0 =
 -- | Open a theory by dropping the closed world assumption and values whose
 -- soundness depends on it.
 openTheory :: ClosedTheory -> OpenTheory
-openTheory  (Theory n h sig c items opts) = openTranslatedTheory(
+openTheory  (Theory n h sig c items opts params) = openTranslatedTheory(
     Theory n h (toSignaturePure sig) (openRuleCache c)
     -- We merge duplicate rules if they were split into variants
       (mergeOpenProtoRules $ map (mapTheoryItem openProtoRule incrementalToSkeletonProof) items)
-      opts)
+      opts params) 
 
 -- | Open a theory by dropping the closed world assumption and values whose
 -- soundness depends on it.

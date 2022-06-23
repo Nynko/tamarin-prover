@@ -20,6 +20,7 @@ module TheoryObject (
   , thyCache
   , thyItems
   , thyOptions
+  , thyParams
   , diffThyName
   , diffThyItems
   , diffThySignature
@@ -110,6 +111,7 @@ module TheoryObject (
   , addCaseTest
   , lookupAccLemma
   , lookupCaseTest
+  , addParamsToThy
   ) where
 
 import Theory.Constraint.Solver.Heuristics
@@ -165,6 +167,7 @@ data Theory sig c r p s = Theory {
        , _thyCache     :: c
        , _thyItems     :: [TheoryItem r p s]
        , _thyOptions   :: Option
+       , _thyParams    :: [(String,String)]  -- (Key,Value)
        }
        deriving( Eq, Ord, Show, Generic, NFData, Binary )
 
@@ -474,7 +477,7 @@ addDiffLemma l thy = do
 
 -- | Add a new default heuristic. Fails if a heuristic is already defined.
 addHeuristic :: [GoalRanking] -> Theory sig c r p s -> Maybe (Theory sig c r p s)
-addHeuristic h (Theory n [] sig c i o) = Just (Theory n h sig c i o)
+addHeuristic h (Theory n [] sig c i o params) = Just (Theory n h sig c i o params)
 addHeuristic _ _ = Nothing
 
 addDiffHeuristic :: [GoalRanking] -> DiffTheory sig c r r2 p p2 -> Maybe (DiffTheory sig c r r2 p p2)
@@ -588,6 +591,9 @@ isRuleItem _            = False
 itemToRule :: TheoryItem r p s -> Maybe r
 itemToRule (RuleItem r) = Just r
 itemToRule _            = Nothing
+
+addParamsToThy :: [(String,String)] -> Theory sig c r p s -> Theory sig c r p s
+addParamsToThy params = modify thyParams (++ params)
 
 --Pretty print a theory
 prettyTheory :: HighlightDocument d

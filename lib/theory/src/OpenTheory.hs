@@ -40,7 +40,8 @@ removeTranslationItems thy =
           ,_thySignature=(L.get thySignature thy)
           ,_thyCache=(L.get thyCache thy)
           ,_thyItems = newThyItems
-          ,_thyOptions =(L.get thyOptions thy)}
+          ,_thyOptions =(L.get thyOptions thy)
+          ,_thyParams = (L.get thyParams thy)}
     where
       newThyItems = map removeTranslationElement (L.get thyItems thy)
       removeTranslationElement :: TheoryItem r p TranslationElement -> TheoryItem r p ()
@@ -59,7 +60,8 @@ openTranslatedTheory thy =
           ,_thySignature=(L.get thySignature thy)
           ,_thyCache=(L.get thyCache thy)
           ,_thyItems = newThyItems
-          ,_thyOptions =(L.get thyOptions thy)}
+          ,_thyOptions =(L.get thyOptions thy)
+          ,_thyParams = (L.get thyParams thy)}
     where
       newThyItems = mapMaybe addTranslationElement (L.get thyItems thy)
       addTranslationElement :: TheoryItem r p () -> Maybe (TheoryItem r p s)
@@ -388,7 +390,7 @@ defaultOption = Option False False False False False False False S.empty
 
 -- | Default theory
 defaultOpenTheory :: Bool -> OpenTheory
-defaultOpenTheory flag = Theory "default" [] (emptySignaturePure flag) [] [] defaultOption
+defaultOpenTheory flag = Theory "default" [] (emptySignaturePure flag) [] [] defaultOption []
 
 -- | Default diff theory
 defaultOpenDiffTheory :: Bool -> OpenDiffTheory
