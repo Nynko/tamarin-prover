@@ -28,7 +28,7 @@ data Option = Option
         , _asynchronousChannels       :: Bool
         , _compressEvents       :: Bool
         , _forcedInjectiveFacts :: S.Set FactTag
-        , _lemmasToProve        :: [String]
+
         , _openChainsLimit      :: Integer
         , _saturationLimit      :: Integer
         }

@@ -47,7 +47,7 @@ module Main.TheoryLoader (
   , addMessageDeductionRuleVariants
 
   , lemmaSelector
-  , getArgsLemmas
+  
   ) where
 
 -- import           Debug.Trace
@@ -85,7 +85,7 @@ import           Text.Parsec                hiding ((<|>),try)
 import           Safe
 import qualified Theory.Text.Pretty as Pretty
 
-import           TheoryObject                        (addLemmasToProveThyOptions,addLemmasToProveDiffThyOptions, diffThyOptions)
+import           TheoryObject                        (diffThyOptions)
 import           Items.OptionItem                    (openChainsLimit,saturationLimit)
 import           Text.Read                           (readMaybe)
 import           Data.Maybe                          (fromMaybe)
@@ -159,15 +159,11 @@ quitOnWarning as = if argExists "quit-on-warning" as then ["quit-on-warning"] el
 hasQuitOnWarning :: Arguments -> Bool
 hasQuitOnWarning as = "quit-on-warning" `elem` quitOnWarning as
 
--- | Get lemmas from the arguments --prove / --lemma
-getArgsLemmas :: Arguments -> [String]
-getArgsLemmas as  = if argExists "prove" as || argExists "lemma" as
-    then findArg "prove" as ++ findArg "lemma" as
-    else []
+
 
 -- | Add parameters in the OpenTheory, here openchain and saturation in the options
 addParamsOptions :: Arguments -> OpenTheory -> OpenTheory
-addParamsOptions as = addSLArg saturation . addOCLArg openchain . addLemmaToProve
+addParamsOptions as = addSLArg saturation . addOCLArg openchain
     where
       openchain = findArg "OpenChainsLimit" as
       saturation = findArg "SaturationLimit" as
@@ -177,12 +173,11 @@ addParamsOptions as = addSLArg saturation . addOCLArg openchain . addLemmaToProv
       -- Add Saturation Limit parameters in the Options
       addSLArg [] = id
       addSLArg sl = set (saturationLimit.thyOptions)  (fromMaybe 5 (readMaybe (head sl) ::Maybe Integer))
-      -- Add lemmas to Prove in the Options
-      addLemmaToProve = addLemmasToProveThyOptions (getArgsLemmas as)
+
 
 -- | Add parameters in the OpenTheory, here openchain and saturation in the options
 addDiffParamsOptions :: Arguments -> OpenDiffTheory -> OpenDiffTheory
-addDiffParamsOptions as = addSLArg saturation . addOCLArg openchain . addLemmaToProve
+addDiffParamsOptions as = addSLArg saturation . addOCLArg openchain
     where
       openchain = findArg "OpenChainsLimit" as
       saturation = findArg "SaturationLimit" as
@@ -192,8 +187,7 @@ addDiffParamsOptions as = addSLArg saturation . addOCLArg openchain . addLemmaTo
       -- Add Saturation Limit parameters in the Options
       addSLArg [] = id
       addSLArg sl = set (saturationLimit.diffThyOptions)  (fromMaybe 5 (readMaybe (head sl) ::Maybe Integer))
-      -- Add lemmas to Prove in the Options
-      addLemmaToProve = addLemmasToProveDiffThyOptions (getArgsLemmas as)
+
 
 lemmaSelectorByModule :: Arguments -> ProtoLemma f p -> Bool
 lemmaSelectorByModule as lem = case lemmaModules of
@@ -377,8 +371,8 @@ reportOnClosedThyStringWellformedness :: Arguments -> String -> IO String
 reportOnClosedThyStringWellformedness as input =
     case loadOpenThyString as input of
       Left  err   -> return $ "parse error: " ++ show err
-      Right thy -> do
-            let openThy = addLemmasToProveThyOptions (getArgsLemmas as) thy -- Get the lemmas to prove (for error checking)
+      Right openThy -> do
+        
             transThy <- Sapic.typeTheory openThy
                   >>= Sapic.translate
                   >>= Acc.translate
@@ -398,8 +392,8 @@ reportOnClosedDiffThyStringWellformedness :: Arguments -> String -> IO String
 reportOnClosedDiffThyStringWellformedness as input = do
     case loadOpenDiffThyString as input of
       Left  err   -> return $ "parse error: " ++ show err
-      Right thy0 -> do
-        let openThy = addLemmasToProveDiffThyOptions (getArgsLemmas as) thy0 -- Get the lemmas to prove (for error checking)
+      Right openThy -> do
+       
         thy1 <- addMessageDeductionRuleVariantsDiff openThy
         sig <- toSignatureWithMaude (maudePath as) $ get diffThySignature thy1
         -- report

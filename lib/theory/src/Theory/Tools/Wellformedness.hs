@@ -93,7 +93,7 @@ import           Theory.Text.Pretty
 import           Theory.Sapic
 import           Theory.Tools.RuleVariants
 import           Safe                        (lastMay)
-import           Items.OptionItem            (lemmasToProve)
+
 import           TheoryObject                (diffThyOptions)
 
 ------------------------------------------------------------------------------
@@ -968,8 +968,8 @@ checkWellformednessDiff :: OpenDiffTheory -> SignatureWithMaude
                     -> WfErrorReport
 checkWellformednessDiff thy sig = -- trace ("checkWellformednessDiff: " ++ show thy) $
   concatMap ($ thy)
-    [ checkIfLemmasInDiffTheory
-    , unboundReportDiff
+    [
+      unboundReportDiff
     , freshNamesReportDiff
     , publicNamesReportDiff
     , ruleSortsReportDiff
@@ -987,8 +987,8 @@ checkWellformednessDiff thy sig = -- trace ("checkWellformednessDiff: " ++ show 
 checkWellformedness :: OpenTranslatedTheory -> SignatureWithMaude
                     -> WfErrorReport
 checkWellformedness thy sig = concatMap ($ thy)
-    [ checkIfLemmasInTheory
-    , unboundReport
+    [
+      unboundReport
     , freshNamesReport
     , publicNamesReport
     , ruleSortsReport
@@ -1028,60 +1028,6 @@ noteWellformednessDiff report thy quitOnWarning =
           [ text "WARNING: the following wellformedness checks failed!"
           , prettyWfErrorReport report
           ]
-
-
--- | A fold to check if the lemmas are proper
-findNotProvedLemmas :: [String] -> [String] -> [String]
-findNotProvedLemmas lemmaArgsNames lemmasInTheory = foldl (\acc x -> if not (argFilter x) then  x:acc else acc ) [] lemmaArgsNames
-  where
-      -- Check a lemma against a prefix* pattern or the name of a lemma 
-      lemmaChecker :: String -> String -> Bool
-      lemmaChecker argLem lemFromThy
-        | lastMay argLem == Just '*' = init argLem `isPrefixOf` lemFromThy
-        | otherwise = argLem == lemFromThy
-
-      -- A filter to check if a lemma (str) is in the list of lemmas from the theory
-      argFilter :: String -> Bool
-      argFilter str = any (lemmaChecker str) lemmasInTheory
-    
-
--- | Check that all the lemmas in the arguments are lemmas of the theory and return an error if not
-  -----------------------
-checkIfLemmasInTheory :: Theory sig c r p s  -> WfErrorReport
-checkIfLemmasInTheory thy 
-        | null notProvedLemmas = []
-        | otherwise = 
-            [(topic, vcat
-            [ text $ "--> '" ++ intercalate "', '" notProvedLemmas ++ "'"  ++ " from arguments "
-              ++ "do(es) not correspond to a specified lemma in the theory "
-            -- , text $ "List of lemmas from the theory: " ++ show (map _lName (theoryLemmas thy))
-            ])]
-
-    where
-      lemmaArgsNames = get (lemmasToProve.thyOptions) thy
-      topic = "Check presence of the --prove/--lemma arguments in theory"
-      lemmasInTheory = map _lName (theoryLemmas thy)
-      notProvedLemmas = findNotProvedLemmas lemmaArgsNames lemmasInTheory
-
-
--- | Check that all the lemmas in the arguments are lemmas of the diffTheory and return an error if not
-  -----------------------
-checkIfLemmasInDiffTheory :: DiffTheory sig c r r2 p p2  -> WfErrorReport
-checkIfLemmasInDiffTheory thy 
-        | null notProvedLemmas = []
-        | otherwise = 
-            [(topic, vcat
-            [ text $ "--> '" ++ intercalate "', '"  notProvedLemmas ++ "'"  ++ " from arguments "
-              ++ "do(es) not correspond to a specified lemma in the theory "
-            -- , text $ "List of lemmas from the theory: " ++ show (map _lName (theoryLemmas thy))
-            ])]
-
-    where
-      lemmaArgsNames = get (lemmasToProve.diffThyOptions) thy
-      topic = "Check presence of the --prove/--lemma arguments in theory"
-      lemmasInTheory = map (_lName.snd) (diffTheoryLemmas thy)
-      notProvedLemmas = findNotProvedLemmas lemmaArgsNames lemmasInTheory
-
 
 
 

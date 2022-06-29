@@ -111,8 +111,7 @@ module TheoryObject (
   , addCaseTest
   , lookupAccLemma
   , lookupCaseTest
-  , addLemmasToProveThyOptions
-  , addLemmasToProveDiffThyOptions
+
   ) where
 
 import Theory.Constraint.Solver.Heuristics
@@ -593,13 +592,6 @@ itemToRule :: TheoryItem r p s -> Maybe r
 itemToRule (RuleItem r) = Just r
 itemToRule _            = Nothing
 
--- | Add the list of lemmas to prove to the options in Theory, if they do not already exist
-addLemmasToProveThyOptions :: [String] -> Theory sig c r p s -> Theory sig c r p s
-addLemmasToProveThyOptions = set (lemmasToProve.thyOptions)
-
--- | Add the list of lemmas to prove to the options in DiffTheory, if they do not already exist
-addLemmasToProveDiffThyOptions :: [String] -> DiffTheory sig c r r2 p p2 -> DiffTheory sig c r r2 p p2
-addLemmasToProveDiffThyOptions = set (lemmasToProve.diffThyOptions)
 
 --Pretty print a theory
 prettyTheory :: HighlightDocument d
