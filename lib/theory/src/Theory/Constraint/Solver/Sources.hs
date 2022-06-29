@@ -22,9 +22,6 @@ module Theory.Constraint.Solver.Sources (
   -- ** Redundant cases
   , removeRedundantCases
 
-  -- Paramters type
-  , IntegerParameters(..)
-
   ) where
 
 import           Prelude                                 hiding (id, (.))
@@ -61,13 +58,6 @@ import           Theory.Model
 import           Control.Monad.Bind
 
 import           Debug.Trace
-
-
--- | Parameters
-data IntegerParameters = IntegerParameters {
-      _paramOpenChainsLimit :: Integer
-    , _paramSaturationLimit :: Integer
-}
 
 ------------------------------------------------------------------------------
 -- Precomputing case distinctions
@@ -132,9 +122,9 @@ refineSource ctxt proofStep th =
 -- repeatedly simplifying the proof state.
 --
 -- Returns the names of the steps applied.
-solveAllSafeGoals :: [Source] -> Integer -> Reduction [String]
-solveAllSafeGoals ths' openChainsLimit =
-    solve ths' [] Nothing openChainsLimit
+solveAllSafeGoals :: [Source] -> Reduction [String]
+solveAllSafeGoals ths' =
+    solve ths' [] Nothing 10
   where
 --    extensiveSplitting = unsafePerformIO $
 --      (getEnv "TAMARIN_EXTENSIVE_SPLIT" >> return True) `catchIOError` \_ -> return False
@@ -143,7 +133,7 @@ solveAllSafeGoals ths' openChainsLimit =
       case goal of
         ChainG _ _    -> if (chainsLeft > 0)
                             then True
-                            else (trace ("Stopping precomputation, too many chain goals. Open Chains limits (can be change with --OCL=): "++ show openChainsLimit) False)
+                            else (trace "Stopping precomputation, too many chain goals." False)
         ActionG _ fa  -> not (isKUFact fa)
         -- we do not solve KD goals for Xor facts as insertAction inserts
         -- these goals directly. This prevents loops in the precomputations
@@ -344,35 +334,35 @@ applySource ctxt th0 goal = case matchToGoal ctxt th0 goal of
   where
     keepVarBindings = M.fromList (map (\v -> (v, v)) (frees goal))
 
+
 -- | Saturate the sources with respect to each other such that no
 -- additional splitting is introduced; i.e., only rules with a single or no
 -- conclusion are used for the saturation.
 saturateSources
-    :: IntegerParameters -> ProofContext -> [Source] -> [Source]
-saturateSources parameters ctxt thsInit  =
+    :: ProofContext -> [Source] -> [Source]
+saturateSources ctxt thsInit =
     (go thsInit 1)
   where
     go :: [Source] -> Integer -> [Source]
     go ths n =
-        if (any or (changes `using` parList rdeepseq)) && (n <= _paramSaturationLimit parameters)
+        if (any or (changes `using` parList rdeepseq)) && (n <= 5)
           then go ths' (n + 1)
-          else if (n > _paramSaturationLimit parameters)
-            then trace ("saturateSources: Saturation aborted, more than " ++ (show (_paramSaturationLimit parameters)) ++ " iterations. (Limit can be change with --SL=)") ths'
+          else if (n > 5)
+            then trace "saturateSources: Saturation aborted, more than 5 iterations." ths'
             else ths'
       where
         (changes, ths') = unzip $ map (refineSource ctxt solver) ths
         goodTh th  = length (getDisj (get cdCases th)) <= 1
-        solver     = do names <- solveAllSafeGoals (filter goodTh ths) (_paramOpenChainsLimit parameters) 
+        solver     = do names <- solveAllSafeGoals (filter goodTh ths)
                         return (not $ null names, names)
 
 -- | Precompute a saturated set of case distinctions.
 precomputeSources
-    :: IntegerParameters
-    -> ProofContext
+    :: ProofContext
     -> [LNGuarded]       -- ^ Restrictions.
     -> [Source]
-precomputeSources parameters ctxt restrictions =
-    map cleanupCaseNames (saturateSources parameters ctxt rawSources)
+precomputeSources ctxt restrictions =
+    map cleanupCaseNames (saturateSources ctxt rawSources)
   where
     cleanupCaseNames = modify cdCases $ fmap $ first $
         filter (not . null)
@@ -425,16 +415,15 @@ precomputeSources parameters ctxt restrictions =
 -- | Refine a set of sources by exploiting additional source
 -- assumptions.
 refineWithSourceAsms
-    :: IntegerParameters -- ^ Parameters for openChains and Saturation limits
-    -> [LNGuarded]    -- ^ Source assumptions to use.
+    :: [LNGuarded]    -- ^ Source assumptions to use.
     -> ProofContext   -- ^ Proof context to use.
     -> [Source]       -- ^ Original, raw sources.
     -> [Source]       -- ^ Manipulated, refined sources.
-refineWithSourceAsms _ [] _ cases0 =
+refineWithSourceAsms [] _ cases0 =
     fmap ((modify cdCases . fmap . second) (set sSourceKind RefinedSource)) $ cases0
-refineWithSourceAsms parameters assumptions ctxt cases0 =
+refineWithSourceAsms assumptions ctxt cases0 =
     fmap (modifySystems removeFormulas) $
-    saturateSources parameters ctxt $
+    saturateSources ctxt $
     modifySystems updateSystem <$> cases0
   where
     modifySystems   = modify cdCases . fmap . second

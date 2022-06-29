@@ -84,11 +84,7 @@ import           Main.Environment
 import           Text.Parsec                hiding ((<|>),try)
 import           Safe
 import qualified Theory.Text.Pretty as Pretty
-
-import           TheoryObject                        (addLemmasToProveThyOptions,addLemmasToProveDiffThyOptions, diffThyOptions)
-import           Items.OptionItem                    (openChainsLimit,saturationLimit)
-import           Text.Read                           (readMaybe)
-import           Data.Maybe                          (fromMaybe)
+import           TheoryObject                        (addLemmasToProveThyOptions,addLemmasToProveDiffThyOptions)
 
 ------------------------------------------------------------------------------
 -- Theory loading: shared between interactive and batch mode
@@ -133,13 +129,6 @@ theoryLoadFlags =
   , flagOpt (oraclePath defaultOracle) ["oraclename"] (updateArg "oraclename") "FILE"
       ("Path to the oracle heuristic (default '" ++ oraclePath defaultOracle ++ "')")
 
-  , flagOpt "10" ["OpenChainsLimit","OCL"] (updateArg "OpenChainsLimit" ) "PositiveInteger"
-      "(Expert argument) Limits the number of open chains"
-
-  , flagOpt "5" ["SaturationLimit","SL"] (updateArg "SaturationLimit" ) "PositiveInteger"
-      "(Expert argument) Limits the number of iterations when saturateSources"
-
-
 --  , flagOpt "" ["diff"] (updateArg "diff") "OFF|ON"
 --      "Turn on observational equivalence (default OFF)."
   ]
@@ -165,34 +154,16 @@ getArgsLemmas as  = if argExists "prove" as || argExists "lemma" as
     then findArg "prove" as ++ findArg "lemma" as
     else []
 
--- | Add parameters in the OpenTheory, here openchain and saturation in the options
+-- | Add parameters in the OpenTheory
 addParamsOptions :: Arguments -> OpenTheory -> OpenTheory
-addParamsOptions as = addSLArg saturation . addOCLArg openchain . addLemmaToProve
+addParamsOptions as = addLemmaToProve
     where
-      openchain = findArg "OpenChainsLimit" as
-      saturation = findArg "SaturationLimit" as
-      -- Add Open Chain Limit parameters in the Options
-      addOCLArg [] = id
-      addOCLArg ocl = set (openChainsLimit.thyOptions) (fromMaybe 10 (readMaybe (head ocl) ::Maybe Integer))
-      -- Add Saturation Limit parameters in the Options
-      addSLArg [] = id
-      addSLArg sl = set (saturationLimit.thyOptions)  (fromMaybe 5 (readMaybe (head sl) ::Maybe Integer))
-      -- Add lemmas to Prove in the Options
       addLemmaToProve = addLemmasToProveThyOptions (getArgsLemmas as)
 
--- | Add parameters in the OpenTheory, here openchain and saturation in the options
+-- | Add parameters in the OpenTheory
 addDiffParamsOptions :: Arguments -> OpenDiffTheory -> OpenDiffTheory
-addDiffParamsOptions as = addSLArg saturation . addOCLArg openchain . addLemmaToProve
+addDiffParamsOptions as = addLemmaToProve
     where
-      openchain = findArg "OpenChainsLimit" as
-      saturation = findArg "SaturationLimit" as
-      -- Add Open Chain Limit parameters in the Options
-      addOCLArg [] = id
-      addOCLArg ocl = set (openChainsLimit.diffThyOptions) (fromMaybe 10 (readMaybe (head ocl) ::Maybe Integer))
-      -- Add Saturation Limit parameters in the Options
-      addSLArg [] = id
-      addSLArg sl = set (saturationLimit.diffThyOptions)  (fromMaybe 5 (readMaybe (head sl) ::Maybe Integer))
-      -- Add lemmas to Prove in the Options
       addLemmaToProve = addLemmasToProveDiffThyOptions (getArgsLemmas as)
 
 lemmaSelectorByModule :: Arguments -> ProtoLemma f p -> Bool
@@ -275,7 +246,7 @@ loadClosedDiffThy as inFile = do
 
 reportWellformednessDoc :: WfErrorReport  -> Pretty.Doc
 reportWellformednessDoc [] =  Pretty.emptyDoc
-reportWellformednessDoc errs  = Pretty.vcat
+reportWellformednessDoc errs  = Pretty.vcat 
                           [ Pretty.text $ "WARNING: " ++ show (length errs)
                                                       ++ " wellformedness check failed!"
                           , Pretty.text "         The analysis results might be wrong!"
