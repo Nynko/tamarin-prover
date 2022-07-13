@@ -17,6 +17,7 @@ module Term.Maude.Parser (
   , parseMatchReply
   , parseVariantsReply
   , parseReduceReply
+  , parseCrcReply
   ) where
 
 import Term.LTerm
@@ -158,6 +159,22 @@ ppMaude t = case viewTerm t of
 -- | The term algebra and rewriting rules as a functional module in Maude.
 ppTheory :: MaudeSig -> ByteString
 ppTheory msig = BC.unlines $
+    ["load /Users/nicolasbeaudouin/Documents/Tamarin/tamarin-prover/MFE/mfe.maude"]
+    ++
+    [ "fmod MSGCR is"
+    , "  sort Pub Fresh Msg Node TOP ."
+    , "  subsort Pub < Msg ."
+    , "  subsort Fresh < Msg ."
+    , "  subsort Msg < TOP ."
+    , "  subsort Node < TOP ."
+    , "  op list : TOP -> TOP ."
+    , "  op cons : TOP TOP -> TOP ."
+    , "  op nil  : -> TOP ." ]
+    ++
+    equations
+    ++
+    [ "endfm" ]
+    ++
     [ "fmod MSG is"
     , "  protecting NAT ."
     , "  sort Pub Fresh Msg Node TOP ."
@@ -176,35 +193,7 @@ ppTheory msig = BC.unlines $
     , "  op cons : TOP TOP -> TOP ."
     , "  op nil  : -> TOP ." ]
     ++
-    (if enableMSet msig
-       then
-       [ theoryOpAC "mun : Msg Msg -> Msg [comm assoc]" ]
-       else [])
-    ++
-    (if enableDH msig
-       then
-       [ theoryOpEq "one : -> Msg"
-       , theoryOpEq "DH_neutral  : -> Msg"       
-       , theoryOpEq "exp : Msg Msg -> Msg"
-       , theoryOpAC "mult : Msg Msg -> Msg [comm assoc]"
-       , theoryOpEq "inv : Msg -> Msg" ]
-       else [])
-    ++
-    (if enableBP msig
-       then
-       [ theoryOpEq "pmult : Msg Msg -> Msg"
-       , theoryOpC "em : Msg Msg -> Msg [comm]" ]
-       else [])
-    ++
-    (if enableXor msig
-       then
-       [ theoryOpEq "zero : -> Msg"
-       , theoryOpAC "xor : Msg Msg -> Msg [comm assoc]" ]
-       else [])
-    ++
-    map theoryFunSym (S.toList $ stFunSyms msig)
-    ++
-    map theoryRule (S.toList $ rrulesForMaudeSig msig)
+    equations
     ++
     [ "endfm" ]
   where
@@ -221,6 +210,38 @@ ppTheory msig = BC.unlines $
         "  eq " <> ppMaude lm <> " = " <> ppMaude rm <> " [variant] ."
       where (lm,rm) = evalBindT ((,) <$>  lTermToMTerm' l <*> lTermToMTerm' r) noBindings
                         `evalFresh` nothingUsed
+
+    equations :: [ByteString]
+    equations = 
+      (if enableMSet msig
+        then
+        [ theoryOpAC "mun : Msg Msg -> Msg [comm assoc]" ]
+        else [])
+      ++
+      (if enableDH msig
+        then
+        [ theoryOpEq "one : -> Msg"
+        , theoryOpEq "DH_neutral  : -> Msg"       
+        , theoryOpEq "exp : Msg Msg -> Msg"
+        , theoryOpAC "mult : Msg Msg -> Msg [comm assoc]"
+        , theoryOpEq "inv : Msg -> Msg" ]
+        else [])
+      ++
+      (if enableBP msig
+        then
+        [ theoryOpEq "pmult : Msg Msg -> Msg"
+        , theoryOpC "em : Msg Msg -> Msg [comm]" ]
+        else [])
+      ++
+      (if enableXor msig
+        then
+        [ theoryOpEq "zero : -> Msg"
+        , theoryOpAC "xor : Msg Msg -> Msg [comm assoc]" ]
+        else [])
+      ++
+      map theoryFunSym (S.toList $ stFunSyms msig)
+      ++
+      map theoryRule (S.toList $ rrulesForMaudeSig msig)
 
 -- Parser for Maude output
 ------------------------------------------------------------------------
@@ -337,3 +358,11 @@ parseTerm msig = choice
         case BC.uncons ident of
             Just ('x', num) -> lit <$> (MaudeVar (read (BC.unpack num)) <$> parseSort)
             _               -> fail "invalid variable"
+
+-- | @parseCrcReply reply@ takes a @reply@ to a match query
+--   returned by Maude and extracts the error if present.
+parseCrcReply :: ByteString -> Maybe String
+parseCrcReply reply 
+        | BC.pack "The specification is locally-confluent" `BC.isInfixOf` reply = Nothing 
+        | otherwise = Just $ BC.unpack reply -- error TODO: return the good equivalent for maude
+

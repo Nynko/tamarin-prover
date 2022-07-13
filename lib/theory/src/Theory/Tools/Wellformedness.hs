@@ -92,6 +92,7 @@ import           Theory
 import           Theory.Text.Pretty
 import           Theory.Sapic
 import           Theory.Tools.RuleVariants
+import           Term.Maude.Process          (checkCrPropertyMaude)
 
 ------------------------------------------------------------------------------
 -- Types for error reports
@@ -216,6 +217,19 @@ ruleVariantsReportDiff sig thy = do
       Nothing -> []
   where
     hnd = get sigmMaudeHandle sig
+
+
+-- | Report on the Church-Rosser property Check with maude.
+churchRosserCheckReport :: SignatureWithMaude -> OpenTranslatedTheory -> WfErrorReport
+churchRosserCheckReport sig thy = do
+                let maybeError = checkCrPropertyMaude hnd
+                if isNothing maybeError then []
+                  else [(topic,text (fromJust maybeError))]
+
+            where
+              hnd = get sigmMaudeHandle sig
+              topic = "Church-Rosser property check"
+
 
 -- | Report on inconsistent left/right rules. This does not check the variants (done by ruleVariantsReportDiff).
 leftRightRuleReportDiff :: OpenDiffTheory -> WfErrorReport
@@ -988,6 +1002,7 @@ checkWellformedness thy sig = concatMap ($ thy)
     , publicNamesReport
     , ruleSortsReport
     , ruleVariantsReport sig
+    , churchRosserCheckReport sig
     , factReports
     , formulaReports
     , lemmaAttributeReport

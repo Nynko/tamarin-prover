@@ -26,6 +26,9 @@ module Term.Maude.Process (
   -- * Normalization using Maude
   , normViaMaude
 
+  -- * Check Church-Rosser property using Maude
+  , checkCrPropertyMaude
+
   -- * Managing the persistent Maude process
   , WithMaude
 ) where
@@ -57,6 +60,8 @@ import System.Process
 import System.IO
 
 import Utils.Misc
+import GHC.IO (unsafePerformIO)
+
 -- import Extension.Data.Monoid
 
 -- import Debug.Trace
@@ -117,8 +122,8 @@ startMaudeProcess maudePath maudeSig = do
   where
     maudeCmd
       | dEBUGMAUDE = "sh -c \"tee /tmp/maude.input | "
-                     ++ maudePath ++ " -interactive -no-tecla -no-banner -no-wrap -batch "
-                     ++ "\" | tee /tmp/maude.output"
+                     ++ maudePath ++ " -interactive -no-tecla -no-banner -no-wrap -batch 2>/tmp/maude.err \""
+                     ++ "\"  | tee /tmp/maude.output"
       | otherwise  =
           maudePath ++ " -interactive -no-tecla -no-banner -no-wrap -batch "
     executeMaudeCommand hin hout cmd =
@@ -170,6 +175,27 @@ callMaude hnd updateStatistics cmd = do
         mp' <- evaluate (updateStatistics mp)
         res <- getToDelim out
         return (mp', res)
+
+-- | @callMaude cmd@ sends the command @cmd@ to Maude and returns Maude's
+-- errors (stderr) up to the next prompt sign.
+callMaudeStderr :: MaudeHandle
+          -> (MaudeProcess -> MaudeProcess) -- ^ Statistics updater.
+          -> ByteString -> IO ByteString
+callMaudeStderr hnd updateStatistics cmd = do
+    -- Ensure that the command is fully evaluated and therefore does not depend
+    -- on another call to Maude anymore. Otherwise, we could end up in a
+    -- deadlock.
+    evaluate (rnf cmd)
+    -- If there was an exception, then we might be out of sync with the current
+    -- persistent Maude process: restart the process.
+    (`onException` restartMaude hnd) $ modifyMVar (mhProc hnd) $ \mp -> do
+        let inp = mIn  mp
+            err = _mErr mp
+        B.hPut inp cmd
+        hFlush  inp
+        mp' <- evaluate (updateStatistics mp)
+        err' <- getToDelim err
+        return (mp', err')
 
 -- | Compute a result via Maude.
 computeViaMaude ::
@@ -305,3 +331,46 @@ normViaMaude hnd sortOf t =
 
 -- | Values that depend on a 'MaudeHandle'.
 type WithMaude = Reader MaudeHandle
+
+
+
+------------------------------------------------------------------------------
+-- Check Church-Rosser Property with Maude
+------------------------------------------------------------------------------
+
+crInitCmd :: ByteString
+crInitCmd = BC.unlines
+    [ ]
+
+crCheckCmd :: ByteString
+crCheckCmd = BC.unlines 
+    ["select MFE ."
+    , "loop init ."
+    , "(set include BOOL off .)"
+    , "(set include TRUTH-VALUE on .)"
+    , "(select tool CRC .)"
+    , "(ccr MSGCR .)"]
+
+checkCrPropertyMaude :: MaudeHandle -> Maybe String
+checkCrPropertyMaude hnd = do
+
+        -- Evaluate each actions in order (with compute) and force computation
+        -- let computeInit = computeErrors crInitCmd -- only get errors if any
+        let crc = compute crCheckCmd 
+
+        -- -- Get the errors
+        -- _ <- checkErrors $ unsafePerformIO computeInit
+        
+        -- return the parsed result (Nothing if correct)
+        parseCrcReply $ unsafePerformIO crc
+
+        where
+            compute = callMaude hnd id
+            computeErrors = callMaudeStderr hnd id
+
+            checkErrors :: ByteString -> Maybe ByteString
+            checkErrors err
+                    | BC.null err = Nothing
+                    | otherwise = fail $ "\ncheckCrPropertyMaude:\nParse error: `" ++ BC.unpack err ++"'"++
+                                         "\nFor query: `" ++ BC.unpack crInitCmd ++"'"
+
