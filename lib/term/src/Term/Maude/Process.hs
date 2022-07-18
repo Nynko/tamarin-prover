@@ -60,7 +60,11 @@ import System.Process
 import System.IO
 
 import Utils.Misc
-import GHC.IO (unsafePerformIO)
+import Data.Maybe (isNothing, fromMaybe)
+import qualified Data.Set                         as S
+import Term.SubtermRule
+import Term.Positions (findPos)
+
 
 -- import Extension.Data.Monoid
 
@@ -75,7 +79,13 @@ import GHC.IO (unsafePerformIO)
 -- it would even be serializable on its own.
 data MaudeHandle = MaudeHandle { mhFilePath :: FilePath
                                , mhMaudeSig :: MaudeSig
-                               , mhProc     :: MVar MaudeProcess }
+                               , mhProc     :: MVar MaudeProcess
+                               , mhData     :: MaudeData }
+
+-- | Maude data information for the initial output (for Church-Rosser Check) if 
+-- the Church-Rosser Check has to be performed. (crCheckBool is set to True)
+data MaudeData = MaudeData { mdInitOut :: ByteString
+                           , mdcrCheckBool :: Bool }
 
 -- | @getMaudeStats@ returns the maude stats formatted as a string.
 getMaudeStats :: MaudeHandle -> IO String
@@ -97,37 +107,67 @@ data MaudeProcess = MP {
     , varCount   :: !Int
     }
 
+
+-----------------------------------------------------------------------
+-- Utils 
+-----------------------------------------------------------------------
+
+-- | Check if the equations are all subterms (if not, then we'll need to perform a Church-Rosser check).
+checkIfAllSubterms :: MaudeSig -> Bool
+checkIfAllSubterms maudeSig = null $ S.filter isNotSubterm (stRules maudeSig)
+            where
+                isNotSubterm ctxtStRule = isNothing $ uncurry findPos (getTerms ctxtStRule)
+                getTerms (CtxtStRule lNTerm (StRhs _ rNTerm) ) = (rNTerm,lNTerm) -- inverted for findPos to work
+
+
+-----------------------------------------------------------------------
+-- Maude Process 
+-----------------------------------------------------------------------
+
 -- | @startMaude@ starts a new instance of Maude and returns a Handle to it.
 startMaude :: FilePath -> MaudeSig -> IO MaudeHandle
 startMaude maudePath maudeSig = do
-    mv <- newMVar =<< startMaudeProcess maudePath maudeSig
+    (mp,mdata) <- startMaudeProcess maudePath crCheckBool maudeSig
+    mv <- newMVar mp
+
     -- Add a finalizer to the MVar that stops maude.
-    _  <- mkWeakMVar mv $ withMVar mv $ \mp -> do
-        terminateProcess (mProc mp) <* waitForProcess (mProc mp)      
+    _  <- mkWeakMVar mv $ withMVar mv $ \mp' -> do
+        terminateProcess (mProc mp') <* waitForProcess (mProc mp')
     -- return the maude handle
-    return (MaudeHandle maudePath maudeSig mv)
+    return (MaudeHandle maudePath maudeSig mv mdata)
+
+    where
+        -- if all subterms, then we don't need to perform a Church-Rosser check
+        crCheckBool = not $ checkIfAllSubterms maudeSig 
+
 
 -- | Start a Maude process.
 startMaudeProcess :: FilePath -- ^ Path to Maude
+                  -> Bool     -- ^ Check Church-Rosser property
                   -> MaudeSig
-                  -> IO (MaudeProcess)
-startMaudeProcess maudePath maudeSig = do
+                  -> IO (MaudeProcess,MaudeData)
+startMaudeProcess maudePath crCheckBool maudeSig = do
     (hin,hout,herr,hproc) <- runInteractiveCommand maudeCmd
     _ <- getToDelim hout
     -- set maude flags
     mapM_ (executeMaudeCommand hin hout) setupCmds
-    -- input the maude theory
-    executeMaudeCommand hin hout (ppTheory maudeSig)
-    return (MP hin hout herr hproc 0 0 0 0)
+
+    -- input the maude theory and check Church-Rosser property if needed
+    when crCheckBool $ putStrLn "Checking Church-Rosser property..."
+    out <- executeMaudeCommand hin hout (ppTheory maudeSig crCheckBool)
+
+    _ <- putStrLn "Analyzing theory..."
+
+    return (MP hin hout herr hproc 0 0 0 0, MaudeData out crCheckBool)
   where
     maudeCmd
-      | dEBUGMAUDE = "sh -c \"tee /tmp/maude.input | "
-                     ++ maudePath ++ " -interactive -no-tecla -no-banner -no-wrap -batch 2>/tmp/maude.err \""
-                     ++ "\"  | tee /tmp/maude.output"
+      | dEBUGMAUDE = "tee /tmp/maude.input | "
+                     ++ maudePath ++ " -interactive -no-tecla -no-banner -no-wrap -batch"
+                     ++ " | tee /tmp/maude.output"
       | otherwise  =
-          maudePath ++ " -interactive -no-tecla -no-banner -no-wrap -batch "
+          maudePath ++ " -interactive -no-tecla -no-banner -no-wrap -batch"
     executeMaudeCommand hin hout cmd =
-        B.hPutStr hin cmd >> hFlush hin >> getToDelim hout >> return ()
+        B.hPutStr hin cmd >> hFlush hin >> getToDelim hout
     setupCmds = [ "set show command off .\n"
                 , "set show timing off .\n"
                 , "set show stats off .\n" ]
@@ -137,9 +177,10 @@ startMaudeProcess maudePath maudeSig = do
 
 -- | Restart the Maude process on this handle.
 restartMaude :: MaudeHandle -> IO ()
-restartMaude (MaudeHandle maudePath maudeSig mv) = modifyMVar_ mv $ \mp -> do
+restartMaude (MaudeHandle maudePath maudeSig mv mdata) = modifyMVar_ mv $ \mp -> do
     terminateProcess (mProc mp) <* waitForProcess (mProc mp)
-    startMaudeProcess maudePath maudeSig
+    (mv',_) <- startMaudeProcess maudePath (mdcrCheckBool mdata) maudeSig
+    return mv'
 
 -- | @getToDelim ih@ reads input from @ih@ until the Maude delimitier is encountered.
 --   It returns the 'ByteString' up to (not including) the delimiter.
@@ -176,26 +217,6 @@ callMaude hnd updateStatistics cmd = do
         res <- getToDelim out
         return (mp', res)
 
--- | @callMaude cmd@ sends the command @cmd@ to Maude and returns Maude's
--- errors (stderr) up to the next prompt sign.
-callMaudeStderr :: MaudeHandle
-          -> (MaudeProcess -> MaudeProcess) -- ^ Statistics updater.
-          -> ByteString -> IO ByteString
-callMaudeStderr hnd updateStatistics cmd = do
-    -- Ensure that the command is fully evaluated and therefore does not depend
-    -- on another call to Maude anymore. Otherwise, we could end up in a
-    -- deadlock.
-    evaluate (rnf cmd)
-    -- If there was an exception, then we might be out of sync with the current
-    -- persistent Maude process: restart the process.
-    (`onException` restartMaude hnd) $ modifyMVar (mhProc hnd) $ \mp -> do
-        let inp = mIn  mp
-            err = _mErr mp
-        B.hPut inp cmd
-        hFlush  inp
-        mp' <- evaluate (updateStatistics mp)
-        err' <- getToDelim err
-        return (mp', err')
 
 -- | Compute a result via Maude.
 computeViaMaude ::
@@ -338,39 +359,40 @@ type WithMaude = Reader MaudeHandle
 -- Check Church-Rosser Property with Maude
 ------------------------------------------------------------------------------
 
-crInitCmd :: ByteString
-crInitCmd = BC.unlines
-    [ ]
-
-crCheckCmd :: ByteString
-crCheckCmd = BC.unlines 
-    ["select MFE ."
-    , "loop init ."
-    , "(set include BOOL off .)"
-    , "(set include TRUTH-VALUE on .)"
-    , "(select tool CRC .)"
-    , "(ccr MSGCR .)"]
-
 checkCrPropertyMaude :: MaudeHandle -> Maybe String
-checkCrPropertyMaude hnd = do
+checkCrPropertyMaude hnd = if not crCheckBool' then Nothing  -- if Church-Rosser not checked --> Nothing
+        else do
+        -- Otherwise get the result of the check
+        let crcOut = BC.breakSubstring (BC.pack "Church-Rosser check") out
+        let crc = parseCrcReply $ snd crcOut
 
-        -- Evaluate each actions in order (with compute) and force computation
-        -- let computeInit = computeErrors crInitCmd -- only get errors if any
-        let crc = compute crCheckCmd 
+        -- Check if warning or errors before the Church-Rosser check
+        let errors = checkErrors $ fst crcOut
 
-        -- -- Get the errors
-        -- _ <- checkErrors $ unsafePerformIO computeInit
-        
         -- return the parsed result (Nothing if correct)
-        parseCrcReply $ unsafePerformIO crc
+        if isNothing errors then crc else Just $ fromMaybe "" crc ++ " " ++ fromMaybe "" errors
 
         where
-            compute = callMaude hnd id
-            computeErrors = callMaudeStderr hnd id
+            maudeInitData = mhData hnd
+            out = mdInitOut maudeInitData
+            crCheckBool' = mdcrCheckBool $ mhData hnd
 
-            checkErrors :: ByteString -> Maybe ByteString
+
+            checkErrors :: ByteString -> Maybe String
             checkErrors err
-                    | BC.null err = Nothing
-                    | otherwise = fail $ "\ncheckCrPropertyMaude:\nParse error: `" ++ BC.unpack err ++"'"++
-                                         "\nFor query: `" ++ BC.unpack crInitCmd ++"'"
+                    | BC.pack "Error:" `BC.isInfixOf` err = Just $ "\ncheckCrPropertyMaude:\nParse error: `" ++
+                            BC.unpack (getStrLine "Error:" err) ++"'"
+                            ++ fromMaybe "" (checkErrors (getStrRest "Error:" err)) -- Getting the rest of the errors/warnings
+                    | BC.pack "Warning:" `BC.isInfixOf` err =  Just $ "\ncheckCrPropertyMaude:\nParse warning: `" ++
+                            BC.unpack (getStrLine "Warning:" err) ++"'"
+                            ++ fromMaybe "" (checkErrors (getStrRest "Warning:" err)) -- Getting the rest of the errors/warnings
+                    | otherwise = Nothing
 
+            getSubStringForLine :: String -> ByteString -> (ByteString,ByteString)
+            getSubStringForLine str bs = BC.breakSubstring (BC.pack "\n") $ snd $ BC.breakSubstring (BC.pack str) bs
+
+            getStrLine :: String -> ByteString -> ByteString
+            getStrLine str bs = fst $ getSubStringForLine str bs
+
+            getStrRest :: String -> ByteString -> ByteString
+            getStrRest str bs = snd $ getSubStringForLine str bs

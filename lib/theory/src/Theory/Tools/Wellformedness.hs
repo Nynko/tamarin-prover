@@ -92,7 +92,7 @@ import           Theory
 import           Theory.Text.Pretty
 import           Theory.Sapic
 import           Theory.Tools.RuleVariants
-import           Term.Maude.Process          (checkCrPropertyMaude)
+import           Term.Maude.Process             (checkCrPropertyMaude)
 
 ------------------------------------------------------------------------------
 -- Types for error reports

@@ -157,11 +157,16 @@ ppMaude t = case viewTerm t of
 ------------------------------------------------------------------------------
 
 -- | The term algebra and rewriting rules as a functional module in Maude.
-ppTheory :: MaudeSig -> ByteString
-ppTheory msig = BC.unlines $
+ppTheory :: MaudeSig -> Bool -> ByteString
+ppTheory msig crCheckBool = BC.unlines $
+    -- Church-Rosser Check if requested
+    (if crCheckBool then 
     ["load /Users/nicolasbeaudouin/Documents/Tamarin/tamarin-prover/MFE/mfe.maude"]
+    -- TO DO : FIX load path
     ++
-    [ "fmod MSGCR is"
+    [ "(set include BOOL off .)"
+    , "(set include TRUTH-VALUE on .)"
+    , "(fmod MSGCR is"
     , "  sort Pub Fresh Msg Node TOP ."
     , "  subsort Pub < Msg ."
     , "  subsort Fresh < Msg ."
@@ -173,7 +178,14 @@ ppTheory msig = BC.unlines $
     ++
     equations
     ++
-    [ "endfm" ]
+    [ "endfm)" ]
+    ++
+    [ "(select tool CRC .)"
+    , "(ccr MSGCR .)"]
+    else 
+      []
+    )
+    -- end crc check
     ++
     [ "fmod MSG is"
     , "  protecting NAT ."
@@ -364,5 +376,5 @@ parseTerm msig = choice
 parseCrcReply :: ByteString -> Maybe String
 parseCrcReply reply 
         | BC.pack "The specification is locally-confluent" `BC.isInfixOf` reply = Nothing 
-        | otherwise = Just $ BC.unpack reply -- error TODO: return the good equivalent for maude
+        | otherwise = Just $ BC.unpack reply -- Not confluent TODO: return the good equivalent for maude
 
