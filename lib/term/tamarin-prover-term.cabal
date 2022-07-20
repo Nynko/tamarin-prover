@@ -29,9 +29,29 @@ description:        This is an internal library of the Tamarin prover for
 homepage:           https://tamarin-prover.github.io/
 
 
+----------------------
+-- Extra Datas
+----------------------
+
+data-files:
+  -- Maude MFE
+  data/MFE/mfe.maude
+  data/MFE/CoCo/*.maude
+  data/MFE/CORE/*.maude
+  data/MFE/CRChC/*.maude
+  data/MFE/EqE/*.maude
+  data/MFE/ERTP/*.maude
+  data/MFE/FM/*.maude
+  data/MFE/GLOT/*.maude
+  data/MFE/ITP/*.maude
+  data/MFE/MTT/*.maude
+  data/MFE/SCC/*.maude
+
+
 source-repository head
   type:     git
   location: https://github.com/tamarin-prover/tamarin-prover.git
+
 
 ----------------------
 -- library stanzas
@@ -96,3 +116,6 @@ library
 
       Term.Substitution.SubstVFree
       Term.Substitution.SubstVFresh
+
+      -- autogen for data (Maude MFE)
+      Paths_tamarin_prover_term

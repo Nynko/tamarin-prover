@@ -1,0 +1,175 @@
+---- Last changes:
+----
+---- Jul 1st, 2014: A new command (select external tool <tool> .) has been added. 
+----   With this command we can choose between the external tools configured in the mfe.config file. 
+---- Feb 21st, 2011: A new command 
+----     (check termination functional part [<module-name>] .)
+----   has been added. It checks the termination of the functional part of the module, 
+----   not taking into account rules. 
+
+
+load termcheck.maude
+load MTT-transformations.1.5j.maude
+
+-------------------------------------------------------------------------------
+---- file: mtt.maude
+---- author: Francisco Duran
+---- last modified by Francisco Duran on January 1st, 2011
+----
+---- commands available:
+
+fmod MTT-HELP is
+  pr EXT-QID-LIST .
+  op mtt-help : -> QidList .
+  eq mtt-help 
+    = '\t string2qidList("(MTT help .)") '\n
+      '\t '\t string2qidList("shows the commands available for the MTT.") '\n
+
+      '\t string2qidList("(ct .) / (check termination .)") '\n
+      '\t '\t string2qidList("checks the termination of the current module. TODO: add path-selection capabilities") '\n
+
+      '\t string2qidList("(ct <module> .) / (check termination <module> .)") '\n
+      '\t '\t string2qidList("checks the termination of the specified module. TODO: add path-selection capabilities") '\n
+
+      '\t string2qidList("(ctf .) / (check termination functional part .)") '\n
+      '\t '\t string2qidList("checks the termination of the functional part of the current module.") '\n ----  TODO: add path-selection capabilities
+      
+      '\t string2qidList("(ctf <module> .) / (check termination functional part <module> .)") '\n
+      '\t '\t string2qidList("checks the termination of the functional part of the specified module.") '\n  ---- TODO: add path-selection capabilities
+
+      '\t string2qidList("(show state .)") '\n
+      '\t '\t string2qidList("shows the state of the MTT.") '\n
+
+      '\t string2qidList("(show proof .)") '\n
+      '\t '\t string2qidList("shows the termination proof for the last check termination") '\n
+      '\t '\t string2qidList("command.") '\n
+
+      '\t string2qidList("(select proof <module> .)") '\n
+      '\t '\t string2qidList("sets the specified module as the current module of the MTT.") '\n 
+
+      '\t string2qidList("(select external tool <tool> .)") '\n
+      '\t '\t string2qidList("sets the specified external tool as the current backend tool of the MTT") '\n 
+      '\t '\t string2qidList("(the specified <tool> must be one of the tools in your mfe.config file).") '\n 
+
+      '\t string2qidList("(show transformation graph .)") '\n
+      '\t '\t string2qidList("shows the transformations available as a graph") '\n 
+      '\t '\t string2qidList("(use semicolons to enter paths, e.g., C;A;B, OS;T;B;O-L, ...).") '\n 
+
+      '\t string2qidList("(show current path .)") '\n
+      '\t '\t string2qidList("shows the current checking path") '\n 
+
+      '\t string2qidList("(select path <path> .)") '\n
+      '\t '\t string2qidList("sets the path to be used in termination checks") '\n 
+      '\t '\t string2qidList("(use the show-transformation-graph command for the available transformations).") '\n 
+
+      '\t string2qidList("(trust .)") '\n
+      '\t '\t string2qidList("Assumes that the current module has been proved terminating.") '\n .
+endfm
+
+
+fmod TERMINATION-CHECKER is
+  pr TERMINATION-CHECK .
+  pr PROC-TPDB .
+        
+  var  M : Module . 
+  var  PP : Path .
+  vars CONDITIONS CONTEXT : Bool .
+  var  Str TOOL : String .
+
+  op terminationCheck : Module Path Bool Bool String -> String .
+ ceq terminationCheck(M, PP, CONDITIONS, CONTEXT, TOOL) 
+    = Out:String
+    if In:String := replace(
+                      replace(
+                        replace(
+                          qidList2string($procTPDB(M, PP, CONDITIONS, CONTEXT)), 
+                          "`", ""), 
+                        "\\n", " "), 
+                      "\\s", " ")
+    /\ Out:String := replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(
+                        termCheck(TOOL, In:String, 30),
+                        "@osb@", "`["), 
+                        "@csb@", "`]"), 
+                        "@ocb@", "`{"), 
+                        "@ccb@", "`}"), 
+                        "@opar@", "`("), 
+                        "@cpar@", "`)"), 
+                        "@semicolon@", ";"), 
+                        "@comma@", "`,"), 
+                        "@bq@", "`"), 
+                        "@underscore@", "_"), 
+                        "@vertical-bar@", "|") 
+    /\ writeToFile("log.txt", "MTT -> AProVE: \n" + In:String + "\n", true) : String 
+    /\ writeToFile("log.txt", "AProVE -> MTT: \n" + Out:String + "\n", false) : String .
+---(
+  eq terminationCheck(M, PP, CONDITIONS, CONTEXT, TOOL) 
+    = replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(
+        termCheck(
+          TOOL, 
+          replace(replace(replace(
+            qidList2string(
+              $procTPDB(M, PP, CONDITIONS, CONTEXT)), 
+            "`", ""), 
+            "\\n", ""), 
+            "\\s", ""), 
+          30),
+          "@osb@", "`["), 
+          "@csb@", "`]"), 
+          "@ocb@", "`{"), 
+          "@ccb@", "`}"), 
+          "@opar@", "`("), 
+          "@cpar@", "`)"), 
+          "@semicolon@", ";"), 
+          "@comma@", "`,"), 
+          "@bq@", "`"), 
+          "@underscore@", "_"), 
+          "@vertical-bar@", "|") .
+---)
+endfm
+
+
+-------------------
+------SIGN
+-------------------
+
+fmod MTT-SIGN is
+  including FULL-MAUDE-SIGN .
+  inc TPDB-SIGN .
+
+  op MTT help . : -> @Command@ .
+  op show state . : -> @Command@ .
+  op trust . : -> @Command@ .
+
+  op check termination . : -> @Command@ .
+  op check termination functional part . : -> @Command@ .
+  op ct . : -> @Command@ .                                      ---- alias 
+  op ctf . : -> @Command@ .                                     ---- alias 
+  op check termination_. : @ModExp@ -> @Command@ .
+  op check termination functional part_. : @ModExp@ -> @Command@ .
+  op ct_. : @ModExp@ -> @Command@ .                             ---- alias
+  op ctf_. : @ModExp@ -> @Command@ .                            ---- alias
+  op show proof . : -> @Command@ .
+  op select proof_. : @ModExp@ -> @Command@ .
+  op select external tool_. : @Token@ -> @Command@ .
+  op select path_. : @Path@ -> @Command@ . 
+  op show current path . : -> @Command@ . 
+  op show transformation graph . : -> @Command@ . 
+  op trust . : -> @Command@ .
+endfm
+
+
+fmod META-MTT-SIGN is
+  pr META-FULL-MAUDE-SIGN .
+  inc UNIT .
+
+  ops MTT-GRAMMAR : -> FModule .
+  eq MTT-GRAMMAR = addImports((including 'MTT-SIGN .), GRAMMAR) .
+endfm
+
+
+mod MTT-TOOL is
+  pr DATABASE-HANDLING .
+  pr TERMINATION-CHECKER .
+  pr MTT-HELP .
+  pr MAP{String, String} .
+endm

@@ -36,6 +36,10 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BC
 
 import Data.Attoparsec.ByteString.Char8
+import GHC.IO (unsafePerformIO)
+import Paths_tamarin_prover_term (getDataFileName)
+
+
 
 -- import Extension.Data.Monoid
 
@@ -156,12 +160,16 @@ ppMaude t = case viewTerm t of
 -- Pretty printing a 'MaudeSig' as a Maude functional module.
 ------------------------------------------------------------------------------
 
+-- | MFE maude directory
+mfe :: FilePath
+mfe = unsafePerformIO $ getDataFileName "data/MFE/mfe.maude"
+
 -- | The term algebra and rewriting rules as a functional module in Maude.
 ppTheory :: MaudeSig -> Bool -> ByteString
 ppTheory msig crCheckBool = BC.unlines $
     -- Church-Rosser Check if requested
     (if crCheckBool then 
-    ["load /Users/nicolasbeaudouin/Documents/Tamarin/tamarin-prover/MFE/mfe.maude"]
+    [BC.append "load " $ BC.pack mfe]
     -- TO DO : FIX load path
     ++
     [ "(set include BOOL off .)"
