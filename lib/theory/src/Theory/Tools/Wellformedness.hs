@@ -218,10 +218,13 @@ ruleVariantsReportDiff sig thy = do
   where
     hnd = get sigmMaudeHandle sig
 
+-------------------------
+-- Check that the equations verifie Church-Rosser property.
+-------------------------
 
 -- | Report on the Church-Rosser property Check with maude.
 churchRosserCheckReport :: SignatureWithMaude -> OpenTranslatedTheory -> WfErrorReport
-churchRosserCheckReport sig thy = do
+churchRosserCheckReport sig _ = do
                 let maybeError = checkCrPropertyMaude hnd
                 if isNothing maybeError then []
                   else [(topic,text (fromJust maybeError))]
@@ -230,6 +233,20 @@ churchRosserCheckReport sig thy = do
               hnd = get sigmMaudeHandle sig
               topic = "Church-Rosser property check"
 
+-- | Report on the Church-Rosser property Check with maude.
+churchRosserCheckDiffReport :: SignatureWithMaude -> OpenDiffTheory -> WfErrorReport
+churchRosserCheckDiffReport sig _ = do
+                let maybeError = checkCrPropertyMaude hnd
+                if isNothing maybeError then []
+                  else [(topic,text (fromJust maybeError))]
+
+            where
+              hnd = get sigmMaudeHandle sig
+              topic = "Church-Rosser property check"
+
+-------------------------
+-- 
+-------------------------
 
 -- | Report on inconsistent left/right rules. This does not check the variants (done by ruleVariantsReportDiff).
 leftRightRuleReportDiff :: OpenDiffTheory -> WfErrorReport
@@ -985,6 +1002,7 @@ checkWellformednessDiff thy sig = -- trace ("checkWellformednessDiff: " ++ show 
     , ruleSortsReportDiff
     , factReportsDiff
     , ruleVariantsReportDiff sig
+    , churchRosserCheckDiffReport sig
     , leftRightRuleReportDiff
 --     , ruleNameReportDiff
     , formulaReportsDiff
