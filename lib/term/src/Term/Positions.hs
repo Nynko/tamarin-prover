@@ -59,7 +59,7 @@ atPosMay (viewTerm -> FApp  _ as)              (i:ps) = do
   return t
 atPosMay (viewTerm -> Lit _)                   (_:_)  = Nothing
 
--- | @findPos t s@ returns the position of the term @s@ inside term @t@ if @s@
+-- | @findPos t s@ returns the position of the term @t@ inside term @s@ if @t@
 --  is a subterm, or Nothing otherwise.
 findPos :: Ord a => Term a -> Term a -> Maybe [Position]
 findPos t t' | t == t'            = Just [[]]
