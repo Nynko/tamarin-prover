@@ -18,6 +18,7 @@ module Term.Maude.Signature (
   , enableMSet
   , enableDiff
   , enableXor
+  , onlyBuiltIns
   , stFunSyms
   , stRules
   , funSyms
@@ -44,6 +45,7 @@ module Term.Maude.Signature (
   -- * extend maude signatures
   , addFunSym
   , addCtxtStRule
+  , disableOnlyBuiltIns
 
   -- * pretty printing
   , prettyMaudeSig
@@ -80,6 +82,7 @@ data MaudeSig = MaudeSig
     , enableMSet         :: Bool
     , enableXor          :: Bool
     , enableDiff         :: Bool
+    , onlyBuiltIns       :: Bool
     , stFunSyms          :: S.Set NoEqSym -- ^ function signature for subterm theory
     , stRules            :: S.Set CtxtStRule  -- ^ rewriting rules for subterm theory
 
@@ -109,18 +112,19 @@ maudeSig msig@MaudeSig{enableDH,enableBP,enableMSet,enableXor,enableDiff=_,stFun
 
 -- | A monoid instance to combine maude signatures.
 instance Semigroup MaudeSig where
-    MaudeSig dh1 bp1 mset1 xor1 diff1 stFunSyms1 stRules1 _ _ _ <>
-      MaudeSig dh2 bp2 mset2 xor2 diff2 stFunSyms2 stRules2 _ _ _ =
+    MaudeSig dh1 bp1 mset1 xor1 diff1 builtIn1 stFunSyms1 stRules1 _ _ _ <>
+      MaudeSig dh2 bp2 mset2 xor2 diff2 builtIn2 stFunSyms2 stRules2 _ _ _ =
           maudeSig (mempty {enableDH=dh1||dh2
                            ,enableBP=bp1||bp2
                            ,enableMSet=mset1||mset2
                            ,enableXor=xor1||xor2
                            ,enableDiff=diff1||diff2
+                           ,onlyBuiltIns=builtIn1 && builtIn2
                            ,stFunSyms=S.union stFunSyms1 stFunSyms2
                            ,stRules=S.union stRules1 stRules2})
 
 instance Monoid MaudeSig where
-    mempty = MaudeSig False False False False False S.empty S.empty S.empty S.empty S.empty
+    mempty = MaudeSig False False False False False True S.empty S.empty S.empty S.empty S.empty
 
 -- | Non-AC function symbols.
 noEqFunSyms :: MaudeSig -> NoEqFunSig
@@ -135,6 +139,10 @@ addFunSym funsym msig =
 addCtxtStRule :: CtxtStRule -> MaudeSig -> MaudeSig
 addCtxtStRule str msig =
     msig `mappend` mempty {stRules=S.fromList [str]}
+
+-- | Set the onlyBuiltIns flag to False.
+disableOnlyBuiltIns :: MaudeSig -> MaudeSig
+disableOnlyBuiltIns msig = msig `mappend` mempty {onlyBuiltIns=False}
 
 -- | Returns all rewriting rules including the rules
 --   for DH, BP, and multiset.

@@ -45,6 +45,7 @@ import Data.Label.Total
 import Data.Label.Mono (Lens)
 import Theory.Sapic
 import qualified Data.Functor
+import            Term.Maude.Signature      (disableOnlyBuiltIns)
 
 
  -- Describes the mapping between Maude Signatures and the builtin Name
@@ -159,7 +160,7 @@ equations =
         rrule <- RRule <$> term llitNoPub True <*> (equalSign *> term llitNoPub True)
         case rRuleToCtxtStRule rrule of
           Just str ->
-              modifyStateSig (addCtxtStRule str)
+              modifyStateSig (disableOnlyBuiltIns.addCtxtStRule str)
           Nothing  ->
               fail $ "Not a correct equation: " ++ show rrule
 

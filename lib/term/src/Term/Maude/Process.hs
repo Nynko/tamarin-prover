@@ -137,8 +137,8 @@ startMaude maudePath maudeSig = do
     return (MaudeHandle maudePath maudeSig mv mdata)
 
     where
-        -- if all subterms, then we don't need to perform a Church-Rosser check
-        crCheckBool = not $ checkIfAllSubterms maudeSig 
+        -- if they are only Built-ins, then we don't need to perform a Church-Rosser check
+        crCheckBool = not $ onlyBuiltIns maudeSig 
 
 
 -- | Start a Maude process.
