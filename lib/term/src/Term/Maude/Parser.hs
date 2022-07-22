@@ -384,5 +384,8 @@ parseTerm msig = choice
 parseCrcReply :: ByteString -> Maybe String
 parseCrcReply reply 
         | BC.pack "The specification is locally-confluent" `BC.isInfixOf` reply = Nothing 
-        | otherwise = Just $ BC.unpack reply -- Not confluent TODO: return the good equivalent for maude
-
+        | otherwise = Just $ errorMessage ++ delim ++ BC.unpack (parsing reply) ++ delim -- Not confluent TODO: return the good equivalent for maude
+      where
+        errorMessage = "The equations were not proved confluent.\nHere is maude's output:\n"
+        delim = "-------------\n"
+        parsing err = snd $ BC.breakSubstring (BC.pack "The following critical pairs") err       
