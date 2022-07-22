@@ -60,10 +60,7 @@ import System.Process
 import System.IO
 
 import Utils.Misc
-import Data.Maybe (isNothing, fromMaybe, isJust, fromJust)
-import qualified Data.Set                         as S
-import Term.SubtermRule
-import Term.Positions (findPos)
+import Data.Maybe (fromMaybe)
 
 
 -- import Extension.Data.Monoid
@@ -126,7 +123,12 @@ startMaude maudePath maudeSig = do
 
     where
         -- if they are only Built-ins, then we don't need to perform a Church-Rosser check
-        crCheckBool = not $ onlyBuiltIns maudeSig
+        notOnlyBuiltIns = not $ onlyBuiltIns maudeSig
+        -- if the noConfluence flag was setted, we don't need the CRC
+        confluenceCheck = not $ noConfluence maudeSig
+
+        crCheckBool = notOnlyBuiltIns && confluenceCheck
+
 
 
 -- | Start a Maude process.

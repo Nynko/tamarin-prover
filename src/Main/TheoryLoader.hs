@@ -83,6 +83,7 @@ import           Main.Environment
 import           Text.Parsec                hiding ((<|>),try)
 import           Safe
 import qualified Theory.Text.Pretty as Pretty
+import           Term.Maude.Signature                (enableNoConfluence)
 
 ------------------------------------------------------------------------------
 -- Theory loading: shared between interactive and batch mode
@@ -127,6 +128,9 @@ theoryLoadFlags =
   , flagOpt (oraclePath defaultOracle) ["oraclename"] (updateArg "oraclename") "FILE"
       ("Path to the oracle heuristic (default '" ++ oraclePath defaultOracle ++ "')")
 
+  , flagNone ["no-confluence-check","ncc"] (addEmptyArg "no-confluence-check")
+      "Prevent the confluence check (Check for the Church-Rosser Property) to be performed with Maude"
+
 --  , flagOpt "" ["diff"] (updateArg "diff") "OFF|ON"
 --      "Turn on observational equivalence (default OFF)."
   ]
@@ -145,6 +149,36 @@ quitOnWarning as = if argExists "quit-on-warning" as then ["quit-on-warning"] el
 
 hasQuitOnWarning :: Arguments -> Bool
 hasQuitOnWarning as = "quit-on-warning" `elem` quitOnWarning as
+
+-----------------------------------------------
+-- Add Options parameters in an OpenTheory
+-----------------------------------------------
+
+-- | Add parameters in the OpenTheory
+addParamsOptions :: Arguments -> OpenTheory -> OpenTheory
+addParamsOptions as = addNcc ncc
+    where
+      ncc = argExists "no-confluence-check" as
+      newSig :: OpenTheory -> MaudeSig
+      newSig = enableNoConfluence . get sigpMaudeSig . get thySignature
+      
+      -- Add the no-confluence check flag in the MaudeSig
+      addNcc :: Bool -> OpenTheory -> OpenTheory
+      addNcc False thy = thy
+      addNcc True thy = set thySignature (Signature (newSig thy)) thy
+
+-- | Add parameters in the OpenTheory
+addDiffParamsOptions :: Arguments -> OpenDiffTheory -> OpenDiffTheory
+addDiffParamsOptions as = addNcc ncc
+    where
+      ncc = argExists "no-confluence-check" as
+      newSig :: OpenDiffTheory -> MaudeSig
+      newSig = enableNoConfluence . get sigpMaudeSig . get diffThySignature
+      
+      -- Add the no-confluence check flag in the MaudeSig
+      addNcc :: Bool -> OpenDiffTheory -> OpenDiffTheory
+      addNcc False thy = thy
+      addNcc True thy = set diffThySignature (Signature (newSig thy)) thy
 
 lemmaSelectorByModule :: Arguments -> ProtoLemma f p -> Bool
 lemmaSelectorByModule as lem = case lemmaModules of
@@ -199,11 +233,12 @@ loadOpenTranslatedThy as inFile =  do
 loadOpenAndTranslatedThy :: Arguments -> FilePath -> IO (OpenTheory, OpenTranslatedTheory)
 loadOpenAndTranslatedThy as inFile =  do
     thy <- loadOpenThy as inFile
-    transThy <- 
-      Sapic.typeTheory thy
+    let thy' = addParamsOptions as thy
+    transThy <-
+      Sapic.typeTheory thy'
       >>= Sapic.translate
       >>= Acc.translate
-    return (thy, removeTranslationItems transThy)
+    return (thy', removeTranslationItems transThy)
 
 -- | Load a closed theory from a file.
 loadClosedThy :: Arguments -> FilePath -> IO ClosedTheory
@@ -219,12 +254,13 @@ loadOpenDiffThy as = parseOpenDiffTheory (diff as ++ defines as ++ quitOnWarning
 loadClosedDiffThy :: Arguments -> FilePath -> IO ClosedDiffTheory
 loadClosedDiffThy as inFile = do
   thy0 <- loadOpenDiffThy as inFile
-  thy1 <- addMessageDeductionRuleVariantsDiff thy0
+  let openDiffThy = addDiffParamsOptions as thy0
+  thy1 <- addMessageDeductionRuleVariantsDiff openDiffThy
   closeDiffThy as thy1
 
 reportWellformednessDoc :: WfErrorReport  -> Pretty.Doc
 reportWellformednessDoc [] =  Pretty.emptyDoc
-reportWellformednessDoc errs  = Pretty.vcat 
+reportWellformednessDoc errs  = Pretty.vcat
                           [ Pretty.text $ "WARNING: " ++ show (length errs)
                                                       ++ " wellformedness check failed!"
                           , Pretty.text "         The analysis results might be wrong!"
@@ -281,7 +317,8 @@ loadClosedThyWfReport as inFile = do
 loadClosedDiffThyWfReport :: Arguments -> FilePath -> IO ClosedDiffTheory
 loadClosedDiffThyWfReport as inFile = do
     thy0 <- loadOpenDiffThy as inFile
-    thy1 <- addMessageDeductionRuleVariantsDiff thy0
+    let openDiffThy = addDiffParamsOptions as thy0
+    thy1 <- addMessageDeductionRuleVariantsDiff openDiffThy
     sig <- toSignatureWithMaude (maudePath as) $ get diffThySignature thy1
     -- report
     let prefix = printFileName inFile
@@ -295,10 +332,11 @@ loadClosedThyString as input =
     case parseOpenTheoryString (defines as) input of
         Left err  -> return $ Left $ "parse error: " ++ show err
         Right thy -> do
-            thy' <-  Sapic.typeTheory thy
+            let openThy = addParamsOptions as thy
+            thy' <-  Sapic.typeTheory openThy
                   >>= Sapic.translate
                   >>= Acc.translate
-            Right <$> closeThy as thy (removeTranslationItems thy') -- No "return" because closeThy gives IO (ClosedTheory)
+            Right <$> closeThy as openThy (removeTranslationItems thy') -- No "return" because closeThy gives IO (ClosedTheory)
 
 
 loadClosedDiffThyString :: Arguments -> String -> IO (Either String ClosedDiffTheory)
@@ -307,7 +345,8 @@ loadClosedDiffThyString as input =
         Left err  -> return $ Left $ "parse error: " ++ show err
         Right thy -> fmap Right $ do
           thy1 <- addMessageDeductionRuleVariantsDiff thy
-          closeDiffThy as thy1
+          let openThy = addDiffParamsOptions as thy1
+          closeDiffThy as openThy
 
 -- | Load an open theory from a string.
 loadOpenThyString :: Arguments -> String -> Either ParseError OpenTheory

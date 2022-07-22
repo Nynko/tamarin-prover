@@ -19,6 +19,7 @@ module Term.Maude.Signature (
   , enableDiff
   , enableXor
   , onlyBuiltIns
+  , noConfluence
   , stFunSyms
   , stRules
   , funSyms
@@ -46,6 +47,7 @@ module Term.Maude.Signature (
   , addFunSym
   , addCtxtStRule
   , disableOnlyBuiltIns
+  , enableNoConfluence
 
   -- * pretty printing
   , prettyMaudeSig
@@ -82,7 +84,8 @@ data MaudeSig = MaudeSig
     , enableMSet         :: Bool
     , enableXor          :: Bool
     , enableDiff         :: Bool
-    , onlyBuiltIns       :: Bool
+    , onlyBuiltIns       :: Bool -- ^ If the theory is only based on built-ins
+    , noConfluence       :: Bool -- ^ If no confluence check was asked on the equations
     , stFunSyms          :: S.Set NoEqSym -- ^ function signature for subterm theory
     , stRules            :: S.Set CtxtStRule  -- ^ rewriting rules for subterm theory
 
@@ -112,19 +115,20 @@ maudeSig msig@MaudeSig{enableDH,enableBP,enableMSet,enableXor,enableDiff=_,stFun
 
 -- | A monoid instance to combine maude signatures.
 instance Semigroup MaudeSig where
-    MaudeSig dh1 bp1 mset1 xor1 diff1 builtIn1 stFunSyms1 stRules1 _ _ _ <>
-      MaudeSig dh2 bp2 mset2 xor2 diff2 builtIn2 stFunSyms2 stRules2 _ _ _ =
+    MaudeSig dh1 bp1 mset1 xor1 diff1 builtIn1 ncc1 stFunSyms1 stRules1 _ _ _ <>
+      MaudeSig dh2 bp2 mset2 xor2 diff2 builtIn2 ncc2 stFunSyms2 stRules2 _ _ _ =
           maudeSig (mempty {enableDH=dh1||dh2
                            ,enableBP=bp1||bp2
                            ,enableMSet=mset1||mset2
                            ,enableXor=xor1||xor2
                            ,enableDiff=diff1||diff2
                            ,onlyBuiltIns=builtIn1 && builtIn2
+                           ,noConfluence = ncc1 || ncc2
                            ,stFunSyms=S.union stFunSyms1 stFunSyms2
                            ,stRules=S.union stRules1 stRules2})
 
 instance Monoid MaudeSig where
-    mempty = MaudeSig False False False False False True S.empty S.empty S.empty S.empty S.empty
+    mempty = MaudeSig False False False False False True False S.empty S.empty S.empty S.empty S.empty
 
 -- | Non-AC function symbols.
 noEqFunSyms :: MaudeSig -> NoEqFunSig
@@ -143,6 +147,11 @@ addCtxtStRule str msig =
 -- | Set the onlyBuiltIns flag to False.
 disableOnlyBuiltIns :: MaudeSig -> MaudeSig
 disableOnlyBuiltIns msig = msig `mappend` mempty {onlyBuiltIns=False}
+
+-- | Set the noConfluence flag to True.
+enableNoConfluence :: MaudeSig -> MaudeSig
+enableNoConfluence msig = msig `mappend` mempty {noConfluence=True}
+
 
 -- | Returns all rewriting rules including the rules
 --   for DH, BP, and multiset.
