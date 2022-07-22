@@ -45,6 +45,9 @@ data-files:
   data/MFE/GLOT/*.maude
   data/MFE/ITP/*.maude
   data/MFE/MTT/*.maude
+  data/MFE/MTT/MTT-transformations.1.5h.maude
+  data/MFE/MTT/MTT-transformations.1.5i.maude
+  data/MFE/MTT/MTT-transformations.1.5j.maude
   data/MFE/SCC/*.maude
 
 
