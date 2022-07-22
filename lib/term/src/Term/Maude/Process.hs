@@ -85,6 +85,7 @@ data MaudeHandle = MaudeHandle { mhFilePath :: FilePath
 -- | Maude data information for the initial output (for Church-Rosser Check) if 
 -- the Church-Rosser Check has to be performed. (crCheckBool is set to True)
 data MaudeData = MaudeData { mdInitOut :: ByteString
+                           ,  mdInitErr :: ByteString
                            , mdcrCheckBool :: Bool }
 
 -- | @getMaudeStats@ returns the maude stats formatted as a string.
@@ -106,18 +107,6 @@ data MaudeProcess = MP {
     , normCount  :: !Int
     , varCount   :: !Int
     }
-
-
------------------------------------------------------------------------
--- Utils 
------------------------------------------------------------------------
-
--- | Check if the equations are all subterms (if not, then we'll need to perform a Church-Rosser check).
-checkIfAllSubterms :: MaudeSig -> Bool
-checkIfAllSubterms maudeSig = null $ S.filter isNotSubterm (stRules maudeSig)
-            where
-                isNotSubterm ctxtStRule = isNothing $ uncurry findPos (getTerms ctxtStRule)
-                getTerms (CtxtStRule lNTerm (StRhs _ rNTerm) ) = (rNTerm,lNTerm) -- inverted for findPos to work
 
 
 -----------------------------------------------------------------------
@@ -155,15 +144,16 @@ startMaudeProcess maudePath crCheckBool maudeSig = do
     -- input the maude theory and check Church-Rosser property if needed
     when crCheckBool $ putStrLn "Checking Church-Rosser property..."
     out <- executeMaudeCommand hin hout (ppTheory maudeSig crCheckBool)
+    err <- B.hGetNonBlocking herr 8096
 
     _ <- putStrLn "Analyzing theory..."
 
-    return (MP hin hout herr hproc 0 0 0 0, MaudeData out crCheckBool)
+    return (MP hin hout herr hproc 0 0 0 0, MaudeData out err crCheckBool)
   where
     maudeCmd
       | dEBUGMAUDE = "tee /tmp/maude.input | "
                      ++ maudePath ++ " -interactive -no-tecla -no-banner -no-wrap -batch"
-                     ++ " | tee /tmp/maude.output"
+                     ++ " | tee /tmp/maude.output" -- You may lose stderr data when using the flag !
       | otherwise  =
           maudePath ++ " -interactive -no-tecla -no-banner -no-wrap -batch"
     executeMaudeCommand hin hout cmd =
@@ -366,8 +356,8 @@ checkCrPropertyMaude hnd = if not crCheckBool' then Nothing  -- if Church-Rosser
         let crcOut = BC.breakSubstring (BC.pack "Church-Rosser check") out
         let crc = parseCrcReply $ snd crcOut
 
-        -- Check if warning or errors before the Church-Rosser check
-        let errors = checkErrors $ fst crcOut
+        -- Check if warning or errors
+        let errors = checkErrors (BC.append out err)
 
         -- return the parsed result (Nothing if correct)
         if isNothing errors then crc else Just $ fromMaybe "" crc ++ " " ++ fromMaybe "" errors
@@ -375,18 +365,20 @@ checkCrPropertyMaude hnd = if not crCheckBool' then Nothing  -- if Church-Rosser
         where
             maudeInitData = mhData hnd
             out = mdInitOut maudeInitData
+            err = mdInitErr maudeInitData
             crCheckBool' = mdcrCheckBool $ mhData hnd
 
 
             checkErrors :: ByteString -> Maybe String
-            checkErrors err
-                    | BC.pack "Error:" `BC.isInfixOf` err = Just $ "\ncheckCrPropertyMaude:\nParse error: `" ++
-                            BC.unpack (getStrLine "Error:" err) ++"'"
-                            ++ fromMaybe "" (checkErrors (getStrRest "Error:" err)) -- Getting the rest of the errors/warnings
-                    | BC.pack "Warning:" `BC.isInfixOf` err =  Just $ "\ncheckCrPropertyMaude:\nParse warning: `" ++
-                            BC.unpack (getStrLine "Warning:" err) ++"'"
-                            ++ fromMaybe "" (checkErrors (getStrRest "Warning:" err)) -- Getting the rest of the errors/warnings
+            checkErrors err'
+                    | BC.pack "Error:" `BC.isInfixOf` err' = Just $ "\ncheckCrPropertyMaude:\nParse error: `" ++
+                            BC.unpack (getStrLine "Error:" err') ++"'"
+                            ++ fromMaybe "" (checkErrors (getStrRest "Error:" err')) -- Getting the rest of the errors/warnings
+                    | BC.pack "Warning:" `BC.isInfixOf` err' =  Just $ "\ncheckCrPropertyMaude:\nParse warning: `" ++
+                            BC.unpack (getStrLine "Warning:" err') ++"'"
+                            ++ fromMaybe "" (checkErrors (getStrRest "Warning:" err')) -- Getting the rest of the errors/warnings
                     | otherwise = Nothing
+            -- Notes : if error or warning is relative to MFE/Full Maude, it might have not been loaded properly: see ppTheory in Parser.hs
 
             getSubStringForLine :: String -> ByteString -> (ByteString,ByteString)
             getSubStringForLine str bs = BC.breakSubstring (BC.pack "\n") $ snd $ BC.breakSubstring (BC.pack str) bs
