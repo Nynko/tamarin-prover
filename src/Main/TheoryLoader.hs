@@ -181,7 +181,7 @@ data ArgumentError = ArgumentError String
 -- Add Options parameters in an OpenTheory
 -----------------------------------------------
 
--- | Add parameters in the OpenTheory, here openchain and saturation in the options
+-- | Add parameters in the OpenTheory, here noConfluenceCheck in the options
 addParamsOptions :: TheoryLoadOptions -> Either OpenTheory OpenDiffTheory -> Either OpenTheory OpenDiffTheory
 addParamsOptions opt = addNcc ncc
 
