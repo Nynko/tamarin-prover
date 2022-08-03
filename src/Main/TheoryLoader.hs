@@ -186,18 +186,19 @@ addParamsOptions :: TheoryLoadOptions -> Either OpenTheory OpenDiffTheory -> Eit
 addParamsOptions opt = addNcc ncc
 
     where
-      -- No Confluence Check : get argument and new MaudeSig
+      -- No Confluence Check : get argument and new (Signature MaudeSig)
       ncc = L.get oNonConfluenceCheck opt
-      newSig :: Either OpenTheory OpenDiffTheory -> MaudeSig
-      newSig (Left thy)      = enableNoConfluence . get sigpMaudeSig . get thySignature thy
-      newSig (Right diffThy) = enableNoConfluence . get sigpMaudeSig . get diffThySignature diffThy
+      newSig :: OpenTheory -> SignaturePure
+      newSig thy  = Signature $ enableNoConfluence $ get sigpMaudeSig $ get thySignature thy
+      newSigDiff :: OpenDiffTheory -> SignaturePure
+      newSigDiff diffThy = Signature $ enableNoConfluence $ get sigpMaudeSig $ get diffThySignature diffThy
       
       -- Add the no-confluence check flag in the MaudeSig
-      addNcc :: Bool -> Either OpenTheory OpenDiffTheory -> OpenTheory
+      addNcc :: Bool -> Either OpenTheory OpenDiffTheory -> Either OpenTheory OpenDiffTheory
       addNcc False (Left thy)      = Left thy
       addNcc False (Right diffThy) = Right diffThy
-      addNcc True (Left thy)       = Left $ set thySignature (Signature (newSig thy)) thy
-      addNcc True (Right diffThy)  = Right $ set diffThySignature (Signature (newSig diffThy)) diffThy
+      addNcc True (Left thy)       = Left $ set thySignature (newSig thy) thy
+      addNcc True (Right diffThy)  = Right $ set diffThySignature (newSigDiff diffThy) diffThy
 
 
 mkTheoryLoadOptions :: MonadError ArgumentError m => Arguments -> m TheoryLoadOptions
@@ -303,7 +304,8 @@ instance Show TheoryLoadError
 loadTheory :: MonadCatch m => TheoryLoadOptions -> String -> FilePath -> ExceptT TheoryLoadError m (Either OpenTheory OpenDiffTheory)
 loadTheory thyOpts input inFile = do
     thy <- withExceptT ParserError $ liftEither $ unwrapError $ bimap parse parse thyParser
-    withTheory translate thy
+    let thy' = addParamsOptions thyOpts thy
+    withTheory translate thy'
   where
     thyParser | isDiffMode = Right $ diffTheory $ Just inFile
               | otherwise  = Left  $ theory     $ Just inFile
